@@ -33,6 +33,482 @@ The platform implements a Medallion Architecture pattern with three distinct lay
 
 ---
 
+## Medallion Architecture with Azure Databricks and ADF
+
+### Complete Medallion Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Source Systems Layer"
+        SF[Salesforce CRM<br/>Customer Profiles, Leads]
+        D365[Dynamics 365 CRM<br/>Customer Interactions]
+        DMS[Dealership Platforms<br/>1,200+ Dealers DMS]
+        SVC[Service Systems<br/>Service Records, Warranty]
+        WEB[Nissan.com<br/>Website Behavior]
+        APP[Mobile App<br/>App Usage Data]
+        EMAIL[Email Marketing<br/>Campaign Engagement]
+        SOCIAL[Social Media<br/>Social Interactions]
+    end
+    
+    subgraph "Azure Data Factory - Orchestration Layer"
+        ADF_ORCH[ADF Pipeline Orchestrator]
+        
+        subgraph "Ingestion Pipelines"
+            ADF_CRM[ADF: CRM Data Ingestion<br/>REST API, OAuth2]
+            ADF_DMS[ADF: Dealership Data<br/>REST API, Service Principal]
+            ADF_SVC[ADF: Service Data<br/>REST API, Batch]
+            ADF_DIG[ADF: Digital Channel Ingestion<br/>Event Hubs Trigger]
+        end
+        
+        subgraph "Data Quality & Validation"
+            ADF_VALIDATE[ADF: Customer Data Validation<br/>Email, Phone, Name Check]
+            ADF_NOTIFY[ADF: Error Notification<br/>Email, Teams]
+        end
+    end
+    
+    subgraph "Bronze Layer - Delta Lake"
+        BRONZE_CRM[(Bronze: CRM Data<br/>Delta Lake<br/>Partitioned by System/Date)]
+        BRONZE_DMS[(Bronze: Dealership Data<br/>Delta Lake<br/>Partitioned by Dealer/Date)]
+        BRONZE_SVC[(Bronze: Service Data<br/>Delta Lake<br/>Partitioned by Service Type/Date)]
+        BRONZE_DIG[(Bronze: Digital Data<br/>Delta Lake<br/>Partitioned by Channel/Date)]
+    end
+    
+    subgraph "Azure Databricks - Silver Layer Processing"
+        DB_SILVER[Databricks: Silver Processing<br/>PySpark Notebooks]
+        
+        subgraph "Silver Transformations"
+            SILVER_CLEAN[Data Cleaning<br/>Email Normalization, Phone Standardization]
+            SILVER_STD[Standardization<br/>Name Formatting, Address Validation]
+            SILVER_ID[Identity Resolution<br/>Fuzzy Matching, Record Linking]
+            SILVER_DEDUP[Deduplication<br/>Customer Merge, Best Record Selection]
+        end
+    end
+    
+    subgraph "Silver Layer - Delta Lake"
+        SILVER_CUSTOMER[(Silver: Master Customers<br/>Delta Lake<br/>Deduplicated Records)]
+        SILVER_INTERACT[(Silver: Customer Interactions<br/>Delta Lake<br/>Unified Interactions)]
+        SILVER_PURCHASE[(Silver: Purchase History<br/>Delta Lake<br/>Complete History)]
+        SILVER_SERVICE[(Silver: Service History<br/>Delta Lake<br/>Service Records)]
+    end
+    
+    subgraph "Azure Databricks - Gold Layer Processing"
+        DB_GOLD[Databricks: Gold Processing<br/>PySpark Notebooks]
+        
+        subgraph "Gold Aggregations"
+            GOLD_360[Customer 360 View<br/>Unified Customer Profile]
+            GOLD_SEG[Segmentation Models<br/>RFM, Behavioral, Value]
+            GOLD_CLV[CLV Calculation<br/>Lifetime Value, Projections]
+            GOLD_CAMP[Campaign Analytics<br/>Response Rates, ROI]
+        end
+    end
+    
+    subgraph "Gold Layer - Azure Synapse"
+        GOLD_CUSTOMER[(Gold: Customer 360<br/>Synapse Dedicated Pool<br/>Optimized for BI)]
+        GOLD_SEGMENT[(Gold: Segmentation<br/>Synapse Dedicated Pool)]
+        GOLD_ANALYTICS[(Gold: Analytics Datasets<br/>Synapse Dedicated Pool)]
+    end
+    
+    subgraph "Power BI - Visualization Layer"
+        PBI_360[Customer 360 Dashboard<br/>Complete Customer View]
+        PBI_SEG[Segmentation Dashboard<br/>Segment Analysis]
+        PBI_CLV[CLV Dashboard<br/>Lifetime Value Analysis]
+        PBI_CAMP[Campaign Analytics<br/>Campaign Performance]
+    end
+    
+    SF --> ADF_CRM
+    D365 --> ADF_CRM
+    DMS --> ADF_DMS
+    SVC --> ADF_SVC
+    WEB --> ADF_DIG
+    APP --> ADF_DIG
+    EMAIL --> ADF_DIG
+    SOCIAL --> ADF_DIG
+    
+    ADF_CRM --> ADF_VALIDATE
+    ADF_DMS --> ADF_VALIDATE
+    ADF_SVC --> ADF_VALIDATE
+    ADF_DIG --> ADF_VALIDATE
+    
+    ADF_VALIDATE -->|Valid Data| BRONZE_CRM
+    ADF_VALIDATE -->|Valid Data| BRONZE_DMS
+    ADF_VALIDATE -->|Valid Data| BRONZE_SVC
+    ADF_VALIDATE -->|Valid Data| BRONZE_DIG
+    ADF_VALIDATE -->|Errors| ADF_NOTIFY
+    
+    BRONZE_CRM --> DB_SILVER
+    BRONZE_DMS --> DB_SILVER
+    BRONZE_SVC --> DB_SILVER
+    BRONZE_DIG --> DB_SILVER
+    
+    DB_SILVER --> SILVER_CLEAN
+    SILVER_CLEAN --> SILVER_STD
+    SILVER_STD --> SILVER_ID
+    SILVER_ID --> SILVER_DEDUP
+    
+    SILVER_DEDUP --> SILVER_CUSTOMER
+    SILVER_DEDUP --> SILVER_INTERACT
+    SILVER_DEDUP --> SILVER_PURCHASE
+    SILVER_DEDUP --> SILVER_SERVICE
+    
+    SILVER_CUSTOMER --> DB_GOLD
+    SILVER_INTERACT --> DB_GOLD
+    SILVER_PURCHASE --> DB_GOLD
+    SILVER_SERVICE --> DB_GOLD
+    
+    DB_GOLD --> GOLD_360
+    DB_GOLD --> GOLD_SEG
+    DB_GOLD --> GOLD_CLV
+    DB_GOLD --> GOLD_CAMP
+    
+    GOLD_360 --> GOLD_CUSTOMER
+    GOLD_SEG --> GOLD_SEGMENT
+    GOLD_CLV --> GOLD_ANALYTICS
+    GOLD_CAMP --> GOLD_ANALYTICS
+    
+    GOLD_CUSTOMER --> PBI_360
+    GOLD_SEGMENT --> PBI_SEG
+    GOLD_ANALYTICS --> PBI_CLV
+    GOLD_ANALYTICS --> PBI_CAMP
+    
+    ADF_ORCH -.->|Orchestrates| ADF_CRM
+    ADF_ORCH -.->|Orchestrates| ADF_DMS
+    ADF_ORCH -.->|Orchestrates| ADF_SVC
+    ADF_ORCH -.->|Orchestrates| ADF_DIG
+    ADF_ORCH -.->|Triggers| DB_SILVER
+    ADF_ORCH -.->|Triggers| DB_GOLD
+```
+
+### Detailed Data Flow Diagram - End-to-End Processing
+
+```mermaid
+sequenceDiagram
+    participant CRM as CRM Systems
+    participant DMS as Dealership Systems
+    participant SVC as Service Systems
+    participant DIG as Digital Channels
+    participant ADF as Azure Data Factory
+    participant EH as Event Hubs
+    participant BRONZE as Bronze Delta Lake
+    participant DB as Azure Databricks
+    participant SILVER as Silver Delta Lake
+    participant GOLD as Gold Synapse
+    participant PBI as Power BI
+    
+    Note over CRM,ADF: Real-Time Ingestion (Every 10 minutes)
+    CRM->>ADF: REST API Call (Customer Profiles)
+    DMS->>ADF: REST API Call (Purchase History)
+    SVC->>ADF: REST API Call (Service Records)
+    DIG->>EH: Event Stream (Web, App, Email)
+    EH->>ADF: Event Trigger
+    
+    Note over ADF,BRONZE: Data Validation & Ingestion
+    ADF->>ADF: Email Validation
+    ADF->>ADF: Phone Validation
+    ADF->>ADF: Name Validation
+    alt Valid Data
+        ADF->>BRONZE: Write to Delta Lake (Append Mode)
+        ADF->>ADF: Log Success
+    else Invalid Data
+        ADF->>ADF: Dead Letter Queue
+        ADF->>ADF: Send Alert (Email/Teams)
+    end
+    
+    Note over ADF,DB: Silver Layer Processing (Triggered by ADF)
+    ADF->>DB: Trigger Databricks Job (Notebook)
+    DB->>BRONZE: Read Raw Customer Data
+    DB->>DB: Email Normalization
+    DB->>DB: Phone Standardization
+    DB->>DB: Name Formatting
+    DB->>DB: Identity Resolution (Fuzzy Matching)
+    DB->>DB: Deduplication Logic
+    DB->>DB: Master Record Creation
+    DB->>SILVER: Write Cleaned Data (Delta Merge)
+    
+    Note over ADF,DB: Gold Layer Processing (Triggered by ADF)
+    ADF->>DB: Trigger Databricks Job (Notebook)
+    DB->>SILVER: Read Master Customer Data
+    DB->>DB: Customer 360 Aggregation
+    DB->>DB: Segmentation Calculation
+    DB->>DB: CLV Calculation
+    DB->>DB: Campaign Analytics
+    DB->>GOLD: Write Analytics Datasets (Synapse)
+    
+    Note over GOLD,PBI: Power BI Consumption
+    PBI->>GOLD: DirectQuery (Real-time)
+    PBI->>GOLD: Import Mode (Scheduled Refresh)
+    GOLD-->>PBI: Return Customer Data
+    PBI->>PBI: Render Dashboards
+```
+
+### Azure Data Factory Orchestration Pipeline
+
+```mermaid
+graph LR
+    subgraph "ADF Master Pipeline - Customer 360 Orchestration"
+        START([Pipeline Start<br/>Scheduled: Every 15 min])
+        
+        subgraph "Parallel Ingestion"
+            P1[Ingest CRM Data<br/>REST API Activity]
+            P2[Ingest Dealership Data<br/>REST API Activity]
+            P3[Ingest Service Data<br/>REST API Activity]
+            P4[Ingest Digital Data<br/>Event Hub Activity]
+        end
+        
+        subgraph "Data Quality Validation"
+            VAL1[Validate CRM Data<br/>Email, Phone, Name Check]
+            VAL2[Validate Dealership Data<br/>Customer ID, VIN Check]
+            VAL3[Validate Service Data<br/>Service ID, Date Check]
+            VAL4[Validate Digital Data<br/>Customer ID, Event Type Check]
+        end
+        
+        subgraph "Bronze Layer Write"
+            B1[Write to Bronze CRM<br/>Databricks Notebook]
+            B2[Write to Bronze Dealership<br/>Databricks Notebook]
+            B3[Write to Bronze Service<br/>Databricks Notebook]
+            B4[Write to Bronze Digital<br/>Databricks Notebook]
+        end
+        
+        subgraph "Silver Layer Processing"
+            S1[Trigger Silver Processing<br/>Databricks Job]
+            S2[Wait for Silver Completion<br/>Wait Activity]
+            S3[Validate Silver Output<br/>Data Flow Activity]
+        end
+        
+        subgraph "Gold Layer Processing"
+            G1[Trigger Gold Processing<br/>Databricks Job]
+            G2[Wait for Gold Completion<br/>Wait Activity]
+            G3[Validate Gold Output<br/>Data Flow Activity]
+        end
+        
+        subgraph "Notification & Monitoring"
+            NOTIFY[Send Success Notification<br/>Email Activity]
+            MONITOR[Update Monitoring Metrics<br/>Log Analytics]
+        end
+        
+        END([Pipeline End])
+    end
+    
+    START --> P1
+    START --> P2
+    START --> P3
+    START --> P4
+    
+    P1 --> VAL1
+    P2 --> VAL2
+    P3 --> VAL3
+    P4 --> VAL4
+    
+    VAL1 -->|Success| B1
+    VAL2 -->|Success| B2
+    VAL3 -->|Success| B3
+    VAL4 -->|Success| B4
+    
+    VAL1 -->|Failure| NOTIFY
+    VAL2 -->|Failure| NOTIFY
+    VAL3 -->|Failure| NOTIFY
+    VAL4 -->|Failure| NOTIFY
+    
+    B1 --> S1
+    B2 --> S1
+    B3 --> S1
+    B4 --> S1
+    
+    S1 --> S2
+    S2 --> S3
+    S3 -->|Success| G1
+    S3 -->|Failure| NOTIFY
+    
+    G1 --> G2
+    G2 --> G3
+    G3 -->|Success| NOTIFY
+    G3 -->|Failure| NOTIFY
+    
+    NOTIFY --> MONITOR
+    MONITOR --> END
+```
+
+### Detailed Processing Flow - Silver Layer
+
+```mermaid
+graph TB
+    subgraph "Bronze Layer Input"
+        B_CRM[Bronze: CRM Data<br/>Raw Customer Profiles]
+        B_DMS[Bronze: Dealership Data<br/>Raw Purchase Records]
+        B_SVC[Bronze: Service Data<br/>Raw Service Records]
+        B_DIG[Bronze: Digital Data<br/>Raw Interactions]
+    end
+    
+    subgraph "Azure Databricks - Silver Processing Cluster"
+        DB_CLUSTER[Databricks Cluster<br/>Standard_DS3_v2<br/>Auto-scaling: 2-8 nodes]
+        
+        subgraph "Notebook 1: Data Cleaning"
+            NB1[Notebook: Clean Customer Data<br/>PySpark]
+            NB1_STEP1[Step 1: Email Normalization<br/>Lowercase, Remove Dots]
+            NB1_STEP2[Step 2: Phone Standardization<br/>Format to E.164]
+            NB1_STEP3[Step 3: Name Formatting<br/>Title Case, Remove Special Chars]
+            NB1_STEP4[Step 4: Address Validation<br/>Format, Validate]
+        end
+        
+        subgraph "Notebook 2: Standardization"
+            NB2[Notebook: Standardize Data<br/>PySpark]
+            NB2_STEP1[Step 1: Customer ID Mapping<br/>Source ID → Standard ID]
+            NB2_STEP2[Step 2: Interaction Type Classification<br/>PURCHASE, SERVICE, WEB, EMAIL]
+            NB2_STEP3[Step 3: Channel Identification<br/>DEALER, DIGITAL, SERVICE]
+            NB2_STEP4[Step 4: Status Normalization<br/>ACTIVE, INACTIVE, PROSPECT]
+        end
+        
+        subgraph "Notebook 3: Identity Resolution"
+            NB3[Notebook: Resolve Identities<br/>PySpark]
+            NB3_STEP1[Step 1: Match on Email<br/>Exact Match]
+            NB3_STEP2[Step 2: Match on Phone<br/>Normalized Phone]
+            NB3_STEP3[Step 3: Fuzzy Name Matching<br/>Levenshtein Distance]
+            NB3_STEP4[Step 4: Calculate Match Scores<br/>Weighted Scoring]
+        end
+        
+        subgraph "Notebook 4: Deduplication"
+            NB4[Notebook: Deduplicate Customers<br/>PySpark]
+            NB4_STEP1[Step 1: Group Matched Records<br/>Match Key Grouping]
+            NB4_STEP2[Step 2: Select Best Record<br/>Data Quality Score]
+            NB4_STEP3[Step 3: Merge Records<br/>Combine Attributes]
+            NB4_STEP4[Step 4: Create Master Record<br/>Unified Customer ID]
+        end
+    end
+    
+    subgraph "Silver Layer Output"
+        S_CUSTOMER[Silver: Master Customers<br/>Delta Lake<br/>Deduplicated Records]
+        S_INTERACT[Silver: Customer Interactions<br/>Delta Lake<br/>Unified Interactions]
+        S_PURCHASE[Silver: Purchase History<br/>Delta Lake<br/>Complete History]
+        S_SERVICE[Silver: Service History<br/>Delta Lake<br/>Service Records]
+    end
+    
+    B_CRM --> DB_CLUSTER
+    B_DMS --> DB_CLUSTER
+    B_SVC --> DB_CLUSTER
+    B_DIG --> DB_CLUSTER
+    
+    DB_CLUSTER --> NB1
+    NB1 --> NB1_STEP1
+    NB1_STEP1 --> NB1_STEP2
+    NB1_STEP2 --> NB1_STEP3
+    NB1_STEP3 --> NB1_STEP4
+    
+    NB1_STEP4 --> NB2
+    NB2 --> NB2_STEP1
+    NB2_STEP1 --> NB2_STEP2
+    NB2_STEP2 --> NB2_STEP3
+    NB2_STEP3 --> NB2_STEP4
+    
+    NB2_STEP4 --> NB3
+    NB3 --> NB3_STEP1
+    NB3_STEP1 --> NB3_STEP2
+    NB3_STEP2 --> NB3_STEP3
+    NB3_STEP3 --> NB3_STEP4
+    
+    NB3_STEP4 --> NB4
+    NB4 --> NB4_STEP1
+    NB4_STEP1 --> NB4_STEP2
+    NB4_STEP2 --> NB4_STEP3
+    NB4_STEP3 --> NB4_STEP4
+    
+    NB4_STEP4 --> S_CUSTOMER
+    NB4_STEP4 --> S_INTERACT
+    NB4_STEP4 --> S_PURCHASE
+    NB4_STEP4 --> S_SERVICE
+```
+
+### Detailed Processing Flow - Gold Layer
+
+```mermaid
+graph TB
+    subgraph "Silver Layer Input"
+        S_CUSTOMER[Silver: Master Customers<br/>Deduplicated]
+        S_INTERACT[Silver: Customer Interactions<br/>Unified]
+        S_PURCHASE[Silver: Purchase History<br/>Complete]
+        S_SERVICE[Silver: Service History<br/>Service Records]
+    end
+    
+    subgraph "Azure Databricks - Gold Processing Cluster"
+        DB_GOLD[Databricks Cluster<br/>Standard_DS4_v2<br/>Auto-scaling: 4-16 nodes]
+        
+        subgraph "Notebook 1: Customer 360"
+            G_NB1[Notebook: Customer 360 View<br/>PySpark]
+            G_NB1_AGG[Aggregate All Touchpoints<br/>Sales, Service, Digital]
+            G_NB1_PROFILE[Create Unified Profile<br/>Complete Customer View]
+            G_NB1_METRICS[Calculate Metrics<br/>Tenure, Frequency, Value]
+        end
+        
+        subgraph "Notebook 2: Segmentation"
+            G_NB2[Notebook: Customer Segmentation<br/>PySpark]
+            G_NB2_RFM[RFM Segmentation<br/>Recency, Frequency, Monetary]
+            G_NB2_BEHAV[Behavioral Segmentation<br/>Purchase Patterns, Preferences]
+            G_NB2_VALUE[Value Segmentation<br/>High, Medium, Low Value]
+        end
+        
+        subgraph "Notebook 3: CLV Calculation"
+            G_NB3[Notebook: CLV Analytics<br/>PySpark]
+            G_NB3_HIST[Historical CLV<br/>Past Revenue Analysis]
+            G_NB3_PROJ[Projected CLV<br/>Future Value Prediction]
+            G_NB3_SEG[CLV by Segment<br/>Segment Value Analysis]
+        end
+        
+        subgraph "Notebook 4: Campaign Analytics"
+            G_NB4[Notebook: Campaign Analytics<br/>PySpark]
+            G_NB4_RESP[Response Rates<br/>Email Opens, Clicks]
+            G_NB4_CONV[Conversion Analysis<br/>Campaign to Purchase]
+            G_NB4_ROI[ROI Calculation<br/>Campaign Effectiveness]
+        end
+    end
+    
+    subgraph "Azure Synapse - Gold Layer"
+        GOLD_CUSTOMER[(Gold: Customer 360<br/>Synapse Dedicated Pool<br/>Clustered Columnstore)]
+        GOLD_SEGMENT[(Gold: Segmentation<br/>Synapse Dedicated Pool)]
+        GOLD_ANALYTICS[(Gold: Analytics Datasets<br/>Synapse Dedicated Pool)]
+    end
+    
+    subgraph "Power BI - Consumption"
+        PBI_360[Customer 360 Dashboard<br/>Complete View]
+        PBI_SEG[Segmentation Dashboard<br/>Segment Analysis]
+        PBI_CLV[CLV Dashboard<br/>Lifetime Value]
+        PBI_CAMP[Campaign Analytics<br/>Performance]
+    end
+    
+    S_CUSTOMER --> DB_GOLD
+    S_INTERACT --> DB_GOLD
+    S_PURCHASE --> DB_GOLD
+    S_SERVICE --> DB_GOLD
+    
+    DB_GOLD --> G_NB1
+    G_NB1 --> G_NB1_AGG
+    G_NB1_AGG --> G_NB1_PROFILE
+    G_NB1_PROFILE --> G_NB1_METRICS
+    G_NB1_METRICS --> GOLD_CUSTOMER
+    
+    DB_GOLD --> G_NB2
+    G_NB2 --> G_NB2_RFM
+    G_NB2_RFM --> G_NB2_BEHAV
+    G_NB2_BEHAV --> G_NB2_VALUE
+    G_NB2_VALUE --> GOLD_SEGMENT
+    
+    DB_GOLD --> G_NB3
+    G_NB3 --> G_NB3_HIST
+    G_NB3_HIST --> G_NB3_PROJ
+    G_NB3_PROJ --> G_NB3_SEG
+    G_NB3_SEG --> GOLD_ANALYTICS
+    
+    DB_GOLD --> G_NB4
+    G_NB4 --> G_NB4_RESP
+    G_NB4_RESP --> G_NB4_CONV
+    G_NB4_CONV --> G_NB4_ROI
+    G_NB4_ROI --> GOLD_ANALYTICS
+    
+    GOLD_CUSTOMER --> PBI_360
+    GOLD_SEGMENT --> PBI_SEG
+    GOLD_ANALYTICS --> PBI_CLV
+    GOLD_ANALYTICS --> PBI_CAMP
+```
+
+---
+
 ## Data Sources and Integration
 
 ### Source Systems

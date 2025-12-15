@@ -33,6 +33,481 @@ The platform implements a Medallion Architecture pattern with three distinct lay
 
 ---
 
+## Medallion Architecture with Azure Databricks and ADF
+
+### Complete Medallion Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Source Systems Layer"
+        MES1[Plant 1: Smyrna<br/>MES System]
+        MES2[Plant 2: Canton<br/>MES System]
+        MES3[Plant 3: Decherd<br/>MES System]
+        MES4[Plant 4: Aguascalientes<br/>MES System]
+        MES5[Plant 5: Resende<br/>MES System]
+        WMS1[Warehouse 1-5<br/>East Region WMS]
+        WMS2[Warehouse 6-10<br/>Central Region WMS]
+        WMS3[Warehouse 11-15<br/>West Region WMS]
+        LOG1[Logistics Partner 1-10<br/>Carrier Systems]
+        LOG2[Logistics Partner 11-20<br/>3PL Systems]
+        DMS[Dealership Inventory<br/>1,200+ Dealers DMS]
+    end
+    
+    subgraph "Azure Data Factory - Orchestration Layer"
+        ADF_ORCH[ADF Pipeline Orchestrator]
+        
+        subgraph "Ingestion Pipelines"
+            ADF_MES[ADF: Manufacturing Ingestion<br/>REST API, OAuth2]
+            ADF_WMS[ADF: Warehouse Ingestion<br/>REST API, Service Principal]
+            ADF_LOG[ADF: Logistics Ingestion<br/>Event Hubs, API]
+            ADF_DMS[ADF: Dealer Inventory<br/>REST API, Batch]
+        end
+        
+        subgraph "Data Quality & Validation"
+            ADF_VALIDATE[ADF: Inventory Validation<br/>VIN Check, Status Validation]
+            ADF_NOTIFY[ADF: Error Notification<br/>Email, Teams, Alerts]
+        end
+    end
+    
+    subgraph "Bronze Layer - Delta Lake"
+        BRONZE_MFG[(Bronze: Manufacturing<br/>Delta Lake<br/>Partitioned by Plant/Date)]
+        BRONZE_WH[(Bronze: Warehouse Inventory<br/>Delta Lake<br/>Partitioned by Warehouse/Date)]
+        BRONZE_LOG[(Bronze: Logistics<br/>Delta Lake<br/>Partitioned by Carrier/Date)]
+        BRONZE_DEALER[(Bronze: Dealer Inventory<br/>Delta Lake<br/>Partitioned by Dealer/Date)]
+    end
+    
+    subgraph "Azure Databricks - Silver Layer Processing"
+        DB_SILVER[Databricks: Silver Processing<br/>PySpark Notebooks]
+        
+        subgraph "Silver Transformations"
+            SILVER_CLEAN[Data Cleaning<br/>VIN Validation, Status Normalization]
+            SILVER_TRACK[Movement Tracking<br/>Location Updates, Status Changes]
+            SILVER_AGE[Aging Calculation<br/>Days in Location, Aging Buckets]
+            SILVER_ENRICH[Enrichment<br/>Vehicle Master, Location Master]
+        end
+    end
+    
+    subgraph "Silver Layer - Delta Lake"
+        SILVER_INV[(Silver: Inventory Tracking<br/>Delta Lake<br/>Unified Inventory View)]
+        SILVER_MOVE[(Silver: Movement History<br/>Delta Lake<br/>Complete Movement Trail)]
+        SILVER_STATUS[(Silver: Status Tracking<br/>Delta Lake<br/>Real-time Status)]
+    end
+    
+    subgraph "Azure Databricks - Gold Layer Processing"
+        DB_GOLD[Databricks: Gold Processing<br/>PySpark Notebooks]
+        
+        subgraph "Gold Aggregations"
+            GOLD_CURRENT[Current Inventory<br/>Snapshot by Location]
+            GOLD_AGING[Aging Analysis<br/>Aging Distribution, Slow Movers]
+            GOLD_MOVE[Movement Analytics<br/>Transit Times, Bottlenecks]
+            GOLD_REPLEN[Replenishment Planning<br/>Stock Levels, Forecasts]
+        end
+    end
+    
+    subgraph "Gold Layer - Azure Synapse"
+        GOLD_INV[(Gold: Inventory Analytics<br/>Synapse Dedicated Pool<br/>Optimized for BI)]
+        GOLD_SUPPLY[(Gold: Supply Chain Visibility<br/>Synapse Dedicated Pool)]
+        GOLD_REPORT[(Gold: Reporting Datasets<br/>Synapse Dedicated Pool)]
+    end
+    
+    subgraph "Power BI - Visualization Layer"
+        PBI_INV[Inventory Dashboard<br/>Real-time Stock Levels]
+        PBI_SUPPLY[Supply Chain Map<br/>End-to-End Visibility]
+        PBI_AGING[Aging Analysis<br/>Slow-Moving Inventory]
+        PBI_REPLEN[Replenishment Planning<br/>Stock Recommendations]
+    end
+    
+    MES1 --> ADF_MES
+    MES2 --> ADF_MES
+    MES3 --> ADF_MES
+    MES4 --> ADF_MES
+    MES5 --> ADF_MES
+    WMS1 --> ADF_WMS
+    WMS2 --> ADF_WMS
+    WMS3 --> ADF_WMS
+    LOG1 --> ADF_LOG
+    LOG2 --> ADF_LOG
+    DMS --> ADF_DMS
+    
+    ADF_MES --> ADF_VALIDATE
+    ADF_WMS --> ADF_VALIDATE
+    ADF_LOG --> ADF_VALIDATE
+    ADF_DMS --> ADF_VALIDATE
+    
+    ADF_VALIDATE -->|Valid Data| BRONZE_MFG
+    ADF_VALIDATE -->|Valid Data| BRONZE_WH
+    ADF_VALIDATE -->|Valid Data| BRONZE_LOG
+    ADF_VALIDATE -->|Valid Data| BRONZE_DEALER
+    ADF_VALIDATE -->|Errors| ADF_NOTIFY
+    
+    BRONZE_MFG --> DB_SILVER
+    BRONZE_WH --> DB_SILVER
+    BRONZE_LOG --> DB_SILVER
+    BRONZE_DEALER --> DB_SILVER
+    
+    DB_SILVER --> SILVER_CLEAN
+    SILVER_CLEAN --> SILVER_TRACK
+    SILVER_TRACK --> SILVER_AGE
+    SILVER_AGE --> SILVER_ENRICH
+    
+    SILVER_ENRICH --> SILVER_INV
+    SILVER_ENRICH --> SILVER_MOVE
+    SILVER_ENRICH --> SILVER_STATUS
+    
+    SILVER_INV --> DB_GOLD
+    SILVER_MOVE --> DB_GOLD
+    SILVER_STATUS --> DB_GOLD
+    
+    DB_GOLD --> GOLD_CURRENT
+    DB_GOLD --> GOLD_AGING
+    DB_GOLD --> GOLD_MOVE
+    DB_GOLD --> GOLD_REPLEN
+    
+    GOLD_CURRENT --> GOLD_INV
+    GOLD_AGING --> GOLD_INV
+    GOLD_MOVE --> GOLD_SUPPLY
+    GOLD_REPLEN --> GOLD_REPORT
+    
+    GOLD_INV --> PBI_INV
+    GOLD_SUPPLY --> PBI_SUPPLY
+    GOLD_INV --> PBI_AGING
+    GOLD_REPORT --> PBI_REPLEN
+    
+    ADF_ORCH -.->|Orchestrates| ADF_MES
+    ADF_ORCH -.->|Orchestrates| ADF_WMS
+    ADF_ORCH -.->|Orchestrates| ADF_LOG
+    ADF_ORCH -.->|Orchestrates| ADF_DMS
+    ADF_ORCH -.->|Triggers| DB_SILVER
+    ADF_ORCH -.->|Triggers| DB_GOLD
+```
+
+### Detailed Data Flow Diagram - End-to-End Processing
+
+```mermaid
+sequenceDiagram
+    participant MES as Manufacturing Plants
+    participant WMS as Warehouse Systems
+    participant LOG as Logistics Partners
+    participant DMS as Dealer Systems
+    participant ADF as Azure Data Factory
+    participant EH as Event Hubs
+    participant BRONZE as Bronze Delta Lake
+    participant DB as Azure Databricks
+    participant SILVER as Silver Delta Lake
+    participant GOLD as Gold Synapse
+    participant PBI as Power BI
+    
+    Note over MES,ADF: Real-Time Ingestion (Every 5 minutes)
+    MES->>ADF: REST API Call (Production Records)
+    WMS->>ADF: REST API Call (Inventory Updates)
+    LOG->>EH: Event Stream (Shipment Status)
+    EH->>ADF: Event Trigger
+    DMS->>ADF: REST API Call (Dealer Inventory)
+    
+    Note over ADF,BRONZE: Data Validation & Ingestion
+    ADF->>ADF: VIN Validation
+    ADF->>ADF: Status Validation
+    ADF->>ADF: Location Validation
+    alt Valid Data
+        ADF->>BRONZE: Write to Delta Lake (Append Mode)
+        ADF->>ADF: Log Success
+    else Invalid Data
+        ADF->>ADF: Dead Letter Queue
+        ADF->>ADF: Send Alert (Email/Teams)
+    end
+    
+    Note over ADF,DB: Silver Layer Processing (Triggered by ADF)
+    ADF->>DB: Trigger Databricks Job (Notebook)
+    DB->>BRONZE: Read Raw Inventory Data
+    DB->>DB: VIN Validation & Standardization
+    DB->>DB: Status Normalization
+    DB->>DB: Location Standardization
+    DB->>DB: Movement Tracking Logic
+    DB->>DB: Aging Calculation
+    DB->>DB: Enrichment (Vehicle/Location Master)
+    DB->>SILVER: Write Cleaned Data (Delta Merge)
+    
+    Note over ADF,DB: Gold Layer Processing (Triggered by ADF)
+    ADF->>DB: Trigger Databricks Job (Notebook)
+    DB->>SILVER: Read Standardized Inventory
+    DB->>DB: Current Inventory Snapshot
+    DB->>DB: Aging Analysis Aggregation
+    DB->>DB: Movement Analytics
+    DB->>DB: Replenishment Planning
+    DB->>GOLD: Write Analytics Datasets (Synapse)
+    
+    Note over GOLD,PBI: Power BI Consumption
+    PBI->>GOLD: DirectQuery (Real-time)
+    PBI->>GOLD: Import Mode (Scheduled Refresh)
+    GOLD-->>PBI: Return Inventory Data
+    PBI->>PBI: Render Dashboards
+```
+
+### Azure Data Factory Orchestration Pipeline
+
+```mermaid
+graph LR
+    subgraph "ADF Master Pipeline - Inventory Analytics Orchestration"
+        START([Pipeline Start<br/>Scheduled: Every 10 min])
+        
+        subgraph "Parallel Ingestion"
+            P1[Ingest Manufacturing Data<br/>REST API Activity]
+            P2[Ingest Warehouse Data<br/>REST API Activity]
+            P3[Ingest Logistics Data<br/>Event Hub Activity]
+            P4[Ingest Dealer Inventory<br/>REST API Activity]
+        end
+        
+        subgraph "Data Quality Validation"
+            VAL1[Validate Manufacturing Data<br/>VIN, Build Date Check]
+            VAL2[Validate Warehouse Data<br/>Location, Status Check]
+            VAL3[Validate Logistics Data<br/>Shipment ID, Carrier Check]
+            VAL4[Validate Dealer Data<br/>Dealer ID, VIN Check]
+        end
+        
+        subgraph "Bronze Layer Write"
+            B1[Write to Bronze Manufacturing<br/>Databricks Notebook]
+            B2[Write to Bronze Warehouse<br/>Databricks Notebook]
+            B3[Write to Bronze Logistics<br/>Databricks Notebook]
+            B4[Write to Bronze Dealer<br/>Databricks Notebook]
+        end
+        
+        subgraph "Silver Layer Processing"
+            S1[Trigger Silver Processing<br/>Databricks Job]
+            S2[Wait for Silver Completion<br/>Wait Activity]
+            S3[Validate Silver Output<br/>Data Flow Activity]
+        end
+        
+        subgraph "Gold Layer Processing"
+            G1[Trigger Gold Processing<br/>Databricks Job]
+            G2[Wait for Gold Completion<br/>Wait Activity]
+            G3[Validate Gold Output<br/>Data Flow Activity]
+        end
+        
+        subgraph "Notification & Monitoring"
+            NOTIFY[Send Success Notification<br/>Email Activity]
+            MONITOR[Update Monitoring Metrics<br/>Log Analytics]
+        end
+        
+        END([Pipeline End])
+    end
+    
+    START --> P1
+    START --> P2
+    START --> P3
+    START --> P4
+    
+    P1 --> VAL1
+    P2 --> VAL2
+    P3 --> VAL3
+    P4 --> VAL4
+    
+    VAL1 -->|Success| B1
+    VAL2 -->|Success| B2
+    VAL3 -->|Success| B3
+    VAL4 -->|Success| B4
+    
+    VAL1 -->|Failure| NOTIFY
+    VAL2 -->|Failure| NOTIFY
+    VAL3 -->|Failure| NOTIFY
+    VAL4 -->|Failure| NOTIFY
+    
+    B1 --> S1
+    B2 --> S1
+    B3 --> S1
+    B4 --> S1
+    
+    S1 --> S2
+    S2 --> S3
+    S3 -->|Success| G1
+    S3 -->|Failure| NOTIFY
+    
+    G1 --> G2
+    G2 --> G3
+    G3 -->|Success| NOTIFY
+    G3 -->|Failure| NOTIFY
+    
+    NOTIFY --> MONITOR
+    MONITOR --> END
+```
+
+### Detailed Processing Flow - Silver Layer
+
+```mermaid
+graph TB
+    subgraph "Bronze Layer Input"
+        B_MFG[Bronze: Manufacturing<br/>Raw Production Records]
+        B_WH[Bronze: Warehouse<br/>Raw Inventory Records]
+        B_LOG[Bronze: Logistics<br/>Raw Shipment Records]
+        B_DEALER[Bronze: Dealer<br/>Raw Inventory Records]
+    end
+    
+    subgraph "Azure Databricks - Silver Processing Cluster"
+        DB_CLUSTER[Databricks Cluster<br/>Standard_DS3_v2<br/>Auto-scaling: 2-8 nodes]
+        
+        subgraph "Notebook 1: Data Cleaning"
+            NB1[Notebook: Clean Inventory Data<br/>PySpark]
+            NB1_STEP1[Step 1: VIN Validation<br/>Regex, Length Check]
+            NB1_STEP2[Step 2: Status Normalization<br/>Status Mapping]
+            NB1_STEP3[Step 3: Location Standardization<br/>Location Code Mapping]
+            NB1_STEP4[Step 4: Date Validation<br/>Format, Range Check]
+        end
+        
+        subgraph "Notebook 2: Movement Tracking"
+            NB2[Notebook: Track Movements<br/>PySpark]
+            NB2_STEP1[Step 1: Identify Movements<br/>Location Changes]
+            NB2_STEP2[Step 2: Calculate Transit Times<br/>Time Deltas]
+            NB2_STEP3[Step 3: Track Status Changes<br/>Status Transitions]
+            NB2_STEP4[Step 4: Build Movement Trail<br/>Complete History]
+        end
+        
+        subgraph "Notebook 3: Aging Calculation"
+            NB3[Notebook: Calculate Aging<br/>PySpark]
+            NB3_STEP1[Step 1: Calculate Days in Location<br/>Date Differences]
+            NB3_STEP2[Step 2: Assign Aging Buckets<br/>0-30, 31-60, etc.]
+            NB3_STEP3[Step 3: Identify Slow Movers<br/>Threshold Analysis]
+            NB3_STEP4[Step 4: Calculate Total Aging<br/>From Build Date]
+        end
+        
+        subgraph "Notebook 4: Enrichment"
+            NB4[Notebook: Enrich Data<br/>PySpark]
+            NB4_STEP1[Step 1: Join Vehicle Master<br/>VIN Lookup]
+            NB4_STEP2[Step 2: Join Location Master<br/>Location Hierarchy]
+            NB4_STEP3[Step 3: Join Dealer Master<br/>Dealer Information]
+            NB4_STEP4[Step 4: Calculate Derived Fields<br/>Metrics, Classifications]
+        end
+    end
+    
+    subgraph "Silver Layer Output"
+        S_INV[Silver: Inventory Tracking<br/>Delta Lake<br/>Unified View]
+        S_MOVE[Silver: Movement History<br/>Delta Lake<br/>Complete Trail]
+        S_STATUS[Silver: Status Tracking<br/>Delta Lake<br/>Real-time Status]
+    end
+    
+    B_MFG --> DB_CLUSTER
+    B_WH --> DB_CLUSTER
+    B_LOG --> DB_CLUSTER
+    B_DEALER --> DB_CLUSTER
+    
+    DB_CLUSTER --> NB1
+    NB1 --> NB1_STEP1
+    NB1_STEP1 --> NB1_STEP2
+    NB1_STEP2 --> NB1_STEP3
+    NB1_STEP3 --> NB1_STEP4
+    
+    NB1_STEP4 --> NB2
+    NB2 --> NB2_STEP1
+    NB2_STEP1 --> NB2_STEP2
+    NB2_STEP2 --> NB2_STEP3
+    NB2_STEP3 --> NB2_STEP4
+    
+    NB2_STEP4 --> NB3
+    NB3 --> NB3_STEP1
+    NB3_STEP1 --> NB3_STEP2
+    NB3_STEP2 --> NB3_STEP3
+    NB3_STEP3 --> NB3_STEP4
+    
+    NB3_STEP4 --> NB4
+    NB4 --> NB4_STEP1
+    NB4_STEP1 --> NB4_STEP2
+    NB4_STEP2 --> NB4_STEP3
+    NB4_STEP3 --> NB4_STEP4
+    
+    NB4_STEP4 --> S_INV
+    NB4_STEP4 --> S_MOVE
+    NB4_STEP4 --> S_STATUS
+```
+
+### Detailed Processing Flow - Gold Layer
+
+```mermaid
+graph TB
+    subgraph "Silver Layer Input"
+        S_INV[Silver: Inventory Tracking<br/>Unified View]
+        S_MOVE[Silver: Movement History<br/>Complete Trail]
+        S_STATUS[Silver: Status Tracking<br/>Real-time Status]
+    end
+    
+    subgraph "Azure Databricks - Gold Processing Cluster"
+        DB_GOLD[Databricks Cluster<br/>Standard_DS4_v2<br/>Auto-scaling: 4-16 nodes]
+        
+        subgraph "Notebook 1: Current Inventory"
+            G_NB1[Notebook: Current Inventory Snapshot<br/>PySpark]
+            G_NB1_AGG[Filter: Current Status<br/>IN_WAREHOUSE, AT_DEALER]
+            G_NB1_LOC[GroupBy: Location<br/>Count, Aging, Value]
+            G_NB1_MODEL[GroupBy: Model<br/>Model Inventory Levels]
+        end
+        
+        subgraph "Notebook 2: Aging Analysis"
+            G_NB2[Notebook: Aging Analytics<br/>PySpark]
+            G_NB2_AGG[GroupBy: Aging Bucket<br/>Distribution Analysis]
+            G_NB2_LOC[GroupBy: Location + Aging<br/>Location Aging]
+            G_NB2_SLOW[Identify Slow Movers<br/>Threshold Analysis]
+        end
+        
+        subgraph "Notebook 3: Movement Analytics"
+            G_NB3[Notebook: Movement Analytics<br/>PySpark]
+            G_NB3_TRANSIT[Calculate Transit Times<br/>Average, Min, Max]
+            G_NB3_BOTTLENECK[Identify Bottlenecks<br/>Location Analysis]
+            G_NB3_ROUTE[Route Optimization<br/>Path Analysis]
+        end
+        
+        subgraph "Notebook 4: Replenishment Planning"
+            G_NB4[Notebook: Replenishment Planning<br/>PySpark]
+            G_NB4_LEVEL[Calculate Stock Levels<br/>Current vs Optimal]
+            G_NB4_FORECAST[Demand Forecasting<br/>Time Series]
+            G_NB4_RECO[Replenishment Recommendations<br/>Priority Scoring]
+        end
+    end
+    
+    subgraph "Azure Synapse - Gold Layer"
+        GOLD_INV[(Gold: Inventory Analytics<br/>Synapse Dedicated Pool<br/>Clustered Columnstore)]
+        GOLD_SUPPLY[(Gold: Supply Chain Visibility<br/>Synapse Dedicated Pool)]
+        GOLD_REPORT[(Gold: Reporting Datasets<br/>Synapse Dedicated Pool)]
+    end
+    
+    subgraph "Power BI - Consumption"
+        PBI_INV[Inventory Dashboard<br/>Real-time Stock]
+        PBI_SUPPLY[Supply Chain Map<br/>End-to-End View]
+        PBI_AGING[Aging Analysis<br/>Slow Movers]
+        PBI_REPLEN[Replenishment Planning<br/>Recommendations]
+    end
+    
+    S_INV --> DB_GOLD
+    S_MOVE --> DB_GOLD
+    S_STATUS --> DB_GOLD
+    
+    DB_GOLD --> G_NB1
+    G_NB1 --> G_NB1_AGG
+    G_NB1_AGG --> G_NB1_LOC
+    G_NB1_LOC --> G_NB1_MODEL
+    G_NB1_MODEL --> GOLD_INV
+    
+    DB_GOLD --> G_NB2
+    G_NB2 --> G_NB2_AGG
+    G_NB2_AGG --> G_NB2_LOC
+    G_NB2_LOC --> G_NB2_SLOW
+    G_NB2_SLOW --> GOLD_INV
+    
+    DB_GOLD --> G_NB3
+    G_NB3 --> G_NB3_TRANSIT
+    G_NB3_TRANSIT --> G_NB3_BOTTLENECK
+    G_NB3_BOTTLENECK --> G_NB3_ROUTE
+    G_NB3_ROUTE --> GOLD_SUPPLY
+    
+    DB_GOLD --> G_NB4
+    G_NB4 --> G_NB4_LEVEL
+    G_NB4_LEVEL --> G_NB4_FORECAST
+    G_NB4_FORECAST --> G_NB4_RECO
+    G_NB4_RECO --> GOLD_REPORT
+    
+    GOLD_INV --> PBI_INV
+    GOLD_SUPPLY --> PBI_SUPPLY
+    GOLD_INV --> PBI_AGING
+    GOLD_REPORT --> PBI_REPLEN
+```
+
+---
+
 ## Data Sources and Integration
 
 ### Source Systems

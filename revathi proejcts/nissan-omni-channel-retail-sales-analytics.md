@@ -33,6 +33,469 @@ The platform implements a Medallion Architecture pattern with three distinct lay
 
 ---
 
+## Medallion Architecture with Azure Databricks and ADF
+
+### Complete Medallion Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Source Systems Layer"
+        DMS1[CDK Global DMS<br/>400 Dealers]
+        DMS2[Reynolds & Reynolds DMS<br/>420 Dealers]
+        DMS3[DealerSocket DMS<br/>380 Dealers]
+        NGSS[Nissan Global Sales System<br/>NGSS API]
+        WEB[Nissan.com<br/>Digital Channels]
+        FLEET[Fleet Partners<br/>Enterprise, Hertz, Avis]
+    end
+    
+    subgraph "Azure Data Factory - Orchestration Layer"
+        ADF_ORCH[ADF Pipeline Orchestrator]
+        
+        subgraph "Ingestion Pipelines"
+            ADF_DMS[ADF: DMS Data Ingestion<br/>REST API, OAuth2]
+            ADF_OEM[ADF: OEM Sales Ingestion<br/>REST API, Service Principal]
+            ADF_DIG[ADF: Digital Channel Ingestion<br/>Event Hubs Trigger]
+            ADF_FLEET[ADF: Fleet Data Ingestion<br/>SFTP, Blob Storage]
+        end
+        
+        subgraph "Data Quality & Validation"
+            ADF_VALIDATE[ADF: Data Validation<br/>Schema Check, Null Check]
+            ADF_NOTIFY[ADF: Error Notification<br/>Email, Teams]
+        end
+    end
+    
+    subgraph "Bronze Layer - Delta Lake"
+        BRONZE_DMS[(Bronze: DMS Sales<br/>Delta Lake<br/>Partitioned by Year/Month/Provider)]
+        BRONZE_OEM[(Bronze: OEM Sales<br/>Delta Lake<br/>Partitioned by Year/Month/Type)]
+        BRONZE_DIG[(Bronze: Digital Data<br/>Delta Lake<br/>Partitioned by Date/Hour)]
+        BRONZE_FLEET[(Bronze: Fleet Sales<br/>Delta Lake<br/>Partitioned by Year/Month)]
+    end
+    
+    subgraph "Azure Databricks - Silver Layer Processing"
+        DB_SILVER[Databricks: Silver Processing<br/>PySpark Notebooks]
+        
+        subgraph "Silver Transformations"
+            SILVER_CLEAN[Data Cleaning<br/>VIN Validation, Price Normalization]
+            SILVER_STD[Standardization<br/>Dealer Codes, Sales Types]
+            SILVER_DEDUP[Deduplication<br/>Fuzzy Matching, Record Linking]
+            SILVER_ENRICH[Enrichment<br/>Vehicle Master, Dealer Master]
+        end
+    end
+    
+    subgraph "Silver Layer - Delta Lake"
+        SILVER_SALES[(Silver: Sales Transactions<br/>Delta Lake<br/>Cleaned & Standardized)]
+        SILVER_CUSTOMER[(Silver: Customer Data<br/>Delta Lake<br/>Deduplicated)]
+        SILVER_VEHICLE[(Silver: Vehicle Data<br/>Delta Lake<br/>Enriched)]
+    end
+    
+    subgraph "Azure Databricks - Gold Layer Processing"
+        DB_GOLD[Databricks: Gold Processing<br/>PySpark Notebooks]
+        
+        subgraph "Gold Aggregations"
+            GOLD_DEALER[Dealer Performance<br/>Sales, Revenue, Metrics]
+            GOLD_MODEL[Model Performance<br/>Sales by Model, Trim]
+            GOLD_REGION[Regional Analytics<br/>Territory, Market Share]
+            GOLD_EXEC[Executive KPIs<br/>Trends, Forecasts]
+        end
+    end
+    
+    subgraph "Gold Layer - Azure Synapse"
+        GOLD_SALES[(Gold: Sales Analytics<br/>Synapse Dedicated Pool<br/>Optimized for BI)]
+        GOLD_PERF[(Gold: Performance Metrics<br/>Synapse Dedicated Pool)]
+        GOLD_REPORT[(Gold: Reporting Datasets<br/>Synapse Dedicated Pool)]
+    end
+    
+    subgraph "Power BI - Visualization Layer"
+        PBI_EXEC[Executive Dashboard<br/>Real-time Sales, Trends]
+        PBI_DEALER[Dealer Performance<br/>Rankings, Benchmarks]
+        PBI_REGION[Regional Analytics<br/>Territory Management]
+        PBI_MODEL[Model Analytics<br/>Sales by Model]
+    end
+    
+    DMS1 --> ADF_DMS
+    DMS2 --> ADF_DMS
+    DMS3 --> ADF_DMS
+    NGSS --> ADF_OEM
+    WEB --> ADF_DIG
+    FLEET --> ADF_FLEET
+    
+    ADF_DMS --> ADF_VALIDATE
+    ADF_OEM --> ADF_VALIDATE
+    ADF_DIG --> ADF_VALIDATE
+    ADF_FLEET --> ADF_VALIDATE
+    
+    ADF_VALIDATE -->|Valid Data| BRONZE_DMS
+    ADF_VALIDATE -->|Valid Data| BRONZE_OEM
+    ADF_VALIDATE -->|Valid Data| BRONZE_DIG
+    ADF_VALIDATE -->|Valid Data| BRONZE_FLEET
+    ADF_VALIDATE -->|Errors| ADF_NOTIFY
+    
+    BRONZE_DMS --> DB_SILVER
+    BRONZE_OEM --> DB_SILVER
+    BRONZE_DIG --> DB_SILVER
+    BRONZE_FLEET --> DB_SILVER
+    
+    DB_SILVER --> SILVER_CLEAN
+    SILVER_CLEAN --> SILVER_STD
+    SILVER_STD --> SILVER_DEDUP
+    SILVER_DEDUP --> SILVER_ENRICH
+    
+    SILVER_ENRICH --> SILVER_SALES
+    SILVER_ENRICH --> SILVER_CUSTOMER
+    SILVER_ENRICH --> SILVER_VEHICLE
+    
+    SILVER_SALES --> DB_GOLD
+    SILVER_CUSTOMER --> DB_GOLD
+    SILVER_VEHICLE --> DB_GOLD
+    
+    DB_GOLD --> GOLD_DEALER
+    DB_GOLD --> GOLD_MODEL
+    DB_GOLD --> GOLD_REGION
+    DB_GOLD --> GOLD_EXEC
+    
+    GOLD_DEALER --> GOLD_SALES
+    GOLD_MODEL --> GOLD_SALES
+    GOLD_REGION --> GOLD_PERF
+    GOLD_EXEC --> GOLD_REPORT
+    
+    GOLD_SALES --> PBI_EXEC
+    GOLD_PERF --> PBI_DEALER
+    GOLD_REPORT --> PBI_REGION
+    GOLD_SALES --> PBI_MODEL
+    
+    ADF_ORCH -.->|Orchestrates| ADF_DMS
+    ADF_ORCH -.->|Orchestrates| ADF_OEM
+    ADF_ORCH -.->|Orchestrates| ADF_DIG
+    ADF_ORCH -.->|Orchestrates| ADF_FLEET
+    ADF_ORCH -.->|Triggers| DB_SILVER
+    ADF_ORCH -.->|Triggers| DB_GOLD
+```
+
+### Detailed Data Flow Diagram - End-to-End Processing
+
+```mermaid
+sequenceDiagram
+    participant DMS as DMS Systems
+    participant NGSS as NGSS API
+    participant WEB as Digital Channels
+    participant ADF as Azure Data Factory
+    participant EH as Event Hubs
+    participant BRONZE as Bronze Delta Lake
+    participant DB as Azure Databricks
+    participant SILVER as Silver Delta Lake
+    participant GOLD as Gold Synapse
+    participant PBI as Power BI
+    
+    Note over DMS,ADF: Real-Time Ingestion (Every 5 minutes)
+    DMS->>ADF: REST API Call (OAuth2 Auth)
+    NGSS->>ADF: REST API Call (Service Principal)
+    WEB->>EH: Event Stream (JSON)
+    EH->>ADF: Event Trigger
+    
+    Note over ADF,BRONZE: Data Validation & Ingestion
+    ADF->>ADF: Schema Validation
+    ADF->>ADF: Data Quality Checks
+    alt Valid Data
+        ADF->>BRONZE: Write to Delta Lake (Append Mode)
+        ADF->>ADF: Log Success
+    else Invalid Data
+        ADF->>ADF: Dead Letter Queue
+        ADF->>ADF: Send Alert (Email/Teams)
+    end
+    
+    Note over ADF,DB: Silver Layer Processing (Triggered by ADF)
+    ADF->>DB: Trigger Databricks Job (Notebook)
+    DB->>BRONZE: Read Raw Data
+    DB->>DB: VIN Validation & Standardization
+    DB->>DB: Price Normalization
+    DB->>DB: Dealer Code Mapping
+    DB->>DB: Sales Type Classification
+    DB->>DB: Deduplication Logic
+    DB->>DB: Enrichment (Vehicle/Dealer Master)
+    DB->>SILVER: Write Cleaned Data (Delta Merge)
+    
+    Note over ADF,DB: Gold Layer Processing (Triggered by ADF)
+    ADF->>DB: Trigger Databricks Job (Notebook)
+    DB->>SILVER: Read Standardized Data
+    DB->>DB: Dealer Performance Aggregation
+    DB->>DB: Model Performance Calculation
+    DB->>DB: Regional Analytics
+    DB->>DB: Executive KPI Calculation
+    DB->>GOLD: Write Analytics Datasets (Synapse)
+    
+    Note over GOLD,PBI: Power BI Consumption
+    PBI->>GOLD: DirectQuery (Real-time)
+    PBI->>GOLD: Import Mode (Scheduled Refresh)
+    GOLD-->>PBI: Return Analytics Data
+    PBI->>PBI: Render Dashboards
+```
+
+### Azure Data Factory Orchestration Pipeline
+
+```mermaid
+graph LR
+    subgraph "ADF Master Pipeline - Sales Analytics Orchestration"
+        START([Pipeline Start<br/>Scheduled: Every 15 min])
+        
+        subgraph "Parallel Ingestion"
+            P1[Ingest DMS Data<br/>REST API Activity]
+            P2[Ingest OEM Sales<br/>REST API Activity]
+            P3[Ingest Digital Data<br/>Event Hub Activity]
+            P4[Ingest Fleet Data<br/>SFTP Activity]
+        end
+        
+        subgraph "Data Quality Validation"
+            VAL1[Validate DMS Data<br/>Data Flow Activity]
+            VAL2[Validate OEM Data<br/>Data Flow Activity]
+            VAL3[Validate Digital Data<br/>Data Flow Activity]
+            VAL4[Validate Fleet Data<br/>Data Flow Activity]
+        end
+        
+        subgraph "Bronze Layer Write"
+            B1[Write to Bronze DMS<br/>Databricks Notebook]
+            B2[Write to Bronze OEM<br/>Databricks Notebook]
+            B3[Write to Bronze Digital<br/>Databricks Notebook]
+            B4[Write to Bronze Fleet<br/>Databricks Notebook]
+        end
+        
+        subgraph "Silver Layer Processing"
+            S1[Trigger Silver Processing<br/>Databricks Job]
+            S2[Wait for Silver Completion<br/>Wait Activity]
+            S3[Validate Silver Output<br/>Data Flow Activity]
+        end
+        
+        subgraph "Gold Layer Processing"
+            G1[Trigger Gold Processing<br/>Databricks Job]
+            G2[Wait for Gold Completion<br/>Wait Activity]
+            G3[Validate Gold Output<br/>Data Flow Activity]
+        end
+        
+        subgraph "Notification & Monitoring"
+            NOTIFY[Send Success Notification<br/>Email Activity]
+            MONITOR[Update Monitoring Metrics<br/>Log Analytics]
+        end
+        
+        END([Pipeline End])
+    end
+    
+    START --> P1
+    START --> P2
+    START --> P3
+    START --> P4
+    
+    P1 --> VAL1
+    P2 --> VAL2
+    P3 --> VAL3
+    P4 --> VAL4
+    
+    VAL1 -->|Success| B1
+    VAL2 -->|Success| B2
+    VAL3 -->|Success| B3
+    VAL4 -->|Success| B4
+    
+    VAL1 -->|Failure| NOTIFY
+    VAL2 -->|Failure| NOTIFY
+    VAL3 -->|Failure| NOTIFY
+    VAL4 -->|Failure| NOTIFY
+    
+    B1 --> S1
+    B2 --> S1
+    B3 --> S1
+    B4 --> S1
+    
+    S1 --> S2
+    S2 --> S3
+    S3 -->|Success| G1
+    S3 -->|Failure| NOTIFY
+    
+    G1 --> G2
+    G2 --> G3
+    G3 -->|Success| NOTIFY
+    G3 -->|Failure| NOTIFY
+    
+    NOTIFY --> MONITOR
+    MONITOR --> END
+```
+
+### Detailed Processing Flow - Silver Layer
+
+```mermaid
+graph TB
+    subgraph "Bronze Layer Input"
+        B_DMS[Bronze: DMS Sales<br/>Raw Transactions]
+        B_OEM[Bronze: OEM Sales<br/>Raw Factory Sales]
+        B_DIG[Bronze: Digital Data<br/>Raw Web Interactions]
+        B_FLEET[Bronze: Fleet Sales<br/>Raw Fleet Transactions]
+    end
+    
+    subgraph "Azure Databricks - Silver Processing Cluster"
+        DB_CLUSTER[Databricks Cluster<br/>Standard_DS3_v2<br/>Auto-scaling: 2-8 nodes]
+        
+        subgraph "Notebook 1: Data Cleaning"
+            NB1[Notebook: Clean Sales Data<br/>PySpark]
+            NB1_STEP1[Step 1: VIN Validation<br/>Regex, Length Check]
+            NB1_STEP2[Step 2: Price Normalization<br/>Currency, Range Validation]
+            NB1_STEP3[Step 3: Date Standardization<br/>Format Conversion]
+            NB1_STEP4[Step 4: Null Handling<br/>Default Values]
+        end
+        
+        subgraph "Notebook 2: Standardization"
+            NB2[Notebook: Standardize Data<br/>PySpark]
+            NB2_STEP1[Step 1: Dealer Code Mapping<br/>DMS Provider → Standard Code]
+            NB2_STEP2[Step 2: Sales Type Classification<br/>RETAIL, WHOLESALE, FLEET]
+            NB2_STEP3[Step 3: Channel Identification<br/>DEALER, OEM, DIGITAL, FLEET]
+            NB2_STEP4[Step 4: Status Normalization<br/>APPROVED, PENDING, CANCELLED]
+        end
+        
+        subgraph "Notebook 3: Deduplication"
+            NB3[Notebook: Deduplicate Records<br/>PySpark]
+            NB3_STEP1[Step 1: Identify Duplicates<br/>VIN + Transaction ID]
+            NB3_STEP2[Step 2: Select Best Record<br/>Data Quality Score]
+            NB3_STEP3[Step 3: Merge Records<br/>Window Functions]
+            NB3_STEP4[Step 4: Flag Duplicates<br/>Metadata Tracking]
+        end
+        
+        subgraph "Notebook 4: Enrichment"
+            NB4[Notebook: Enrich Data<br/>PySpark]
+            NB4_STEP1[Step 1: Join Vehicle Master<br/>VIN Lookup]
+            NB4_STEP2[Step 2: Join Dealer Master<br/>Dealer Code Lookup]
+            NB4_STEP3[Step 3: Join Region Master<br/>Territory Mapping]
+            NB4_STEP4[Step 4: Calculate Derived Fields<br/>Aging, Metrics]
+        end
+    end
+    
+    subgraph "Silver Layer Output"
+        S_SALES[Silver: Sales Transactions<br/>Delta Lake<br/>Partitioned by Sale Date]
+        S_CUSTOMER[Silver: Customer Data<br/>Delta Lake<br/>Partitioned by Customer ID]
+        S_VEHICLE[Silver: Vehicle Sales<br/>Delta Lake<br/>Partitioned by VIN]
+    end
+    
+    B_DMS --> DB_CLUSTER
+    B_OEM --> DB_CLUSTER
+    B_DIG --> DB_CLUSTER
+    B_FLEET --> DB_CLUSTER
+    
+    DB_CLUSTER --> NB1
+    NB1 --> NB1_STEP1
+    NB1_STEP1 --> NB1_STEP2
+    NB1_STEP2 --> NB1_STEP3
+    NB1_STEP3 --> NB1_STEP4
+    
+    NB1_STEP4 --> NB2
+    NB2 --> NB2_STEP1
+    NB2_STEP1 --> NB2_STEP2
+    NB2_STEP2 --> NB2_STEP3
+    NB2_STEP3 --> NB2_STEP4
+    
+    NB2_STEP4 --> NB3
+    NB3 --> NB3_STEP1
+    NB3_STEP1 --> NB3_STEP2
+    NB3_STEP2 --> NB3_STEP3
+    NB3_STEP3 --> NB3_STEP4
+    
+    NB3_STEP4 --> NB4
+    NB4 --> NB4_STEP1
+    NB4_STEP1 --> NB4_STEP2
+    NB4_STEP2 --> NB4_STEP3
+    NB4_STEP3 --> NB4_STEP4
+    
+    NB4_STEP4 --> S_SALES
+    NB4_STEP4 --> S_CUSTOMER
+    NB4_STEP4 --> S_VEHICLE
+```
+
+### Detailed Processing Flow - Gold Layer
+
+```mermaid
+graph TB
+    subgraph "Silver Layer Input"
+        S_SALES[Silver: Sales Transactions<br/>Standardized Data]
+        S_CUSTOMER[Silver: Customer Data<br/>Deduplicated]
+        S_VEHICLE[Silver: Vehicle Data<br/>Enriched]
+    end
+    
+    subgraph "Azure Databricks - Gold Processing Cluster"
+        DB_GOLD[Databricks Cluster<br/>Standard_DS4_v2<br/>Auto-scaling: 4-16 nodes]
+        
+        subgraph "Notebook 1: Dealer Performance"
+            G_NB1[Notebook: Dealer Analytics<br/>PySpark]
+            G_NB1_AGG[GroupBy: Dealer + Date<br/>Sales Count, Revenue, Avg Price]
+            G_NB1_RANK[Calculate Rankings<br/>Window Functions]
+            G_NB1_METRICS[Calculate Metrics<br/>Growth, Trends, Benchmarks]
+        end
+        
+        subgraph "Notebook 2: Model Performance"
+            G_NB2[Notebook: Model Analytics<br/>PySpark]
+            G_NB2_AGG[GroupBy: Model + Date<br/>Sales Volume, Revenue]
+            G_NB2_TREND[Calculate Trends<br/>MoM, YoY Growth]
+            G_NB2_SEGMENT[Model Segmentation<br/>Best Sellers, Slow Movers]
+        end
+        
+        subgraph "Notebook 3: Regional Analytics"
+            G_NB3[Notebook: Regional Analytics<br/>PySpark]
+            G_NB3_AGG[GroupBy: Region + Date<br/>Territory Performance]
+            G_NB3_MARKET[Market Share Analysis<br/>Competitive Positioning]
+            G_NB3_FORECAST[Forecasting<br/>Time Series Analysis]
+        end
+        
+        subgraph "Notebook 4: Executive KPIs"
+            G_NB4[Notebook: Executive KPIs<br/>PySpark]
+            G_NB4_TOTAL[Total Sales & Revenue<br/>Aggregations]
+            G_NB4_TREND[Trend Analysis<br/>Historical Comparison]
+            G_NB4_FORECAST[Forecasting<br/>Predictive Analytics]
+        end
+    end
+    
+    subgraph "Azure Synapse - Gold Layer"
+        GOLD_DEALER[(Gold: Dealer Performance<br/>Synapse Dedicated Pool<br/>Clustered Columnstore)]
+        GOLD_MODEL[(Gold: Model Performance<br/>Synapse Dedicated Pool)]
+        GOLD_REGION[(Gold: Regional Analytics<br/>Synapse Dedicated Pool)]
+        GOLD_EXEC[(Gold: Executive KPIs<br/>Synapse Dedicated Pool)]
+    end
+    
+    subgraph "Power BI - Consumption"
+        PBI_DEALER[Dealer Performance<br/>Dashboard]
+        PBI_MODEL[Model Analytics<br/>Dashboard]
+        PBI_REGION[Regional Analytics<br/>Dashboard]
+        PBI_EXEC[Executive Dashboard<br/>Real-time]
+    end
+    
+    S_SALES --> DB_GOLD
+    S_CUSTOMER --> DB_GOLD
+    S_VEHICLE --> DB_GOLD
+    
+    DB_GOLD --> G_NB1
+    G_NB1 --> G_NB1_AGG
+    G_NB1_AGG --> G_NB1_RANK
+    G_NB1_RANK --> G_NB1_METRICS
+    G_NB1_METRICS --> GOLD_DEALER
+    
+    DB_GOLD --> G_NB2
+    G_NB2 --> G_NB2_AGG
+    G_NB2_AGG --> G_NB2_TREND
+    G_NB2_TREND --> G_NB2_SEGMENT
+    G_NB2_SEGMENT --> GOLD_MODEL
+    
+    DB_GOLD --> G_NB3
+    G_NB3 --> G_NB3_AGG
+    G_NB3_AGG --> G_NB3_MARKET
+    G_NB3_MARKET --> G_NB3_FORECAST
+    G_NB3_FORECAST --> GOLD_REGION
+    
+    DB_GOLD --> G_NB4
+    G_NB4 --> G_NB4_TOTAL
+    G_NB4_TOTAL --> G_NB4_TREND
+    G_NB4_TREND --> G_NB4_FORECAST
+    G_NB4_FORECAST --> GOLD_EXEC
+    
+    GOLD_DEALER --> PBI_DEALER
+    GOLD_MODEL --> PBI_MODEL
+    GOLD_REGION --> PBI_REGION
+    GOLD_EXEC --> PBI_EXEC
+```
+
+---
+
 ## Data Sources and Integration
 
 ### Source Systems
