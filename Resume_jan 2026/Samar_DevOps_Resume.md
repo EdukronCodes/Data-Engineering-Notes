@@ -29,33 +29,67 @@ DevOps Engineer focusing on CI/CD and cloud infrastructure, seeking to specializ
 - **Other**: Linux administration, scripting, documentation, collaboration
 
 ## Projects
+#  Azure DevOps Projects
 
-### Project 1: ML API CI/CD & Deployment
-- **Title**: ML API CI/CD & Deployment
-- **Description**: Built CI/CD pipelines and infrastructure to deploy Python-based ML APIs in a reliable, repeatable way.
-- **Skills**: Git, CI/CD (GitHub Actions/Jenkins), Docker, Python, FastAPI
-- **Roles & Responsibilities**:
-  1. Automated build, test, and deployment steps triggered on code changes.
-  2. Implemented environment-specific configurations and secrets handling.
-  3. Deployed services to cloud VMs/containers and set up load balancing and health checks.
-  4. Monitored deployments and implemented rollback strategies.
+---
 
-### Project 2: GenAI Model Hosting Environment
-- **Title**: GenAI Model Hosting Environment
-- **Description**: Set up a scalable environment for hosting GenAI services exposed to internal tools and microservices.
-- **Skills**: Docker, cloud infra, LLM APIs, security, monitoring
-- **Roles & Responsibilities**:
-  1. Provisioned instances with GPU/CPU profiles suited to GenAI workloads.
-  2. Configured secure access to external LLM gateways, ensuring key rotation and auditing.
-  3. Established dashboards tracking request volume, latency, and cost per feature.
-  4. Worked with data scientists to validate performance and optimize resource allocation.
+## Project 1: End-to-End CI/CD Pipeline for Microservices on Azure Kubernetes Service (AKS)
 
-### Project 3: Agentic Infra Automation Bot
-- **Title**: Agentic Infra Automation Bot
-- **Description**: Created a bot that observes infra metrics and Git events, recommending or carrying out actions like scaling or restarting services.
-- **Skills**: Scripting (Python/Bash), monitoring APIs, webhooks, agent logic
-- **Roles & Responsibilities**:
-  1. Integrated monitoring tools with webhooks to trigger bot actions when thresholds were crossed.
-  2. Implemented decision logic for actions (e.g., scale up/down, restart pods/services, notify owners).
-  3. Logged all actions for auditability and continuous improvement.
-  4. Documented workflows and trained the team on using and extending the bot.
+### Problem Statement
+Automate build, test, and deployment of multiple microservices with **zero downtime** and **rollback support**.
+
+### Tools & Services
+- Azure DevOps (Repos, Pipelines, Artifacts)
+- Azure Kubernetes Service (AKS)
+- Docker
+- Helm
+- Azure Container Registry (ACR)
+- SonarQube
+- Azure Key Vault
+
+### Implementation
+- Created **multi-stage Azure DevOps YAML pipelines** for build, test, security scanning, and deployment.
+- Dockerized microservices and pushed container images to **Azure Container Registry (ACR)**.
+- Integrated **SonarQube** for static code analysis and vulnerability scanning.
+- Used **Helm charts** to manage Kubernetes deployments.
+- Implemented **Blue-Green and Canary deployment strategies** in AKS.
+- Managed application secrets and configuration using **Azure Key Vault**.
+- Enabled **automatic rollback** on deployment failure to ensure high availability.
+
+### Outcome
+- Reduced deployment time by **70%**
+- Achieved **zero-downtime deployments**
+- Improved code quality and release confidence
+
+**Key Skills Shown:**  
+CI/CD · AKS · Docker · Helm · YAML Pipelines · DevSecOps
+
+---
+
+## Project 2: Infrastructure as Code (IaC) Automation Using Terraform & Azure DevOps
+
+### Problem Statement
+Manual Azure resource provisioning was **error-prone**, **time-consuming**, and inconsistent across environments.
+
+### Tools & Services
+- Azure DevOps Pipelines
+- Terraform
+- Azure Resource Manager (ARM)
+- Azure Storage (Remote Backend)
+- Azure Key Vault
+
+### Implementation
+- Designed reusable **Terraform modules** for VNet, VM, AKS, SQL Database, and Storage Accounts.
+- Created **environment-specific Azure DevOps pipelines** for Dev, QA, and Prod.
+- Configured **Terraform remote state** using Azure Storage backend.
+- Integrated **Azure Key Vault** for secure secret management.
+- Implemented **manual approval gates** for production deployments.
+- Enabled **infrastructure drift detection** using `terraform plan`.
+
+### Outcome
+- Standardized infrastructure provisioning across environments
+- Reduced infrastructure setup time from **days to minutes**
+- Improved compliance, governance, and auditability
+
+**📌 Key Skills Shown:**  
+Terraform · IaC · Azure DevOps · Environment Isolation · Governance
