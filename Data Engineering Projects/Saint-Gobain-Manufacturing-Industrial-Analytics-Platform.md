@@ -1332,4 +1332,170 @@ flowchart TD
 7. Power BI refreshes the OEE dashboard, and plant managers see the reduced OEE for Line 3 along with root-cause indicators (e.g., bearing vibration).  
 8. Predictive maintenance models can flag that the pattern matches early failure signatures and open a maintenance work order in SAP (through an integration not detailed here), closing the loop between analytics and operations.
 
+---
+
+#### 8.5 Failure Handling & Recovery Flows (Error Paths)
+
+In a production-grade industrial analytics platform, **failure handling and recovery flows** are as important as the happy path. This section details how ADF, Databricks, and the data lake collaborate to detect, isolate, and remediate failures without compromising data integrity.
+
+##### 8.5.1 Ingestion Failure Flow (ADF Pipelines)
+
+**Scenario:** MES extraction fails due to a network issue with the on-prem SQL Server.
+
+**Step-by-step flow:**  
+1. **ADF Copy_mes_to_landing** attempts to connect to the MES database using the Self-Hosted IR.  
+2. The connection fails (e.g., network timeout, authentication issue).  
+3. ADF marks the activity as **Failed** and immediately triggers the **OnFailure** path.  
+4. **OnFailure_LogError** (Stored Procedure / Web Activity):  
+   - Writes a record to an `ops_error_log` table in a monitoring database or Delta table in ADLS.  
+   - Captures details: pipeline_name, activity_name, error_code, error_message, start_time, end_time, affected_plant_id, run_window.  
+5. **OnFailure_Notify** (Email / Teams / Webhook Activity):  
+   - Sends an alert to the operations team with error context and a link to the failed pipeline run in ADF monitoring.  
+6. **Retry Policy**:  
+   - If configured, ADF automatically retries the activity based on a retry policy (e.g., 3 retries with exponential backoff).  
+7. **Escalation**:  
+   - If retries fail, a secondary alert (e.g., high-priority Teams message or incident in ITSM tool) is triggered.  
+8. **Manual Intervention**:  
+   - Ops team investigates the root cause (e.g., VPN down, credentials expired), resolves the issue, and manually **re-runs the pipeline** for the failed window.
+
+**Failure flow diagram (MES ingestion):**
+
+```mermaid
+flowchart TD
+    ADF_PIPE[ADF Pipeline: pl_ingest_mes]
+    COPY_MES[Copy_mes_to_landing]
+    RETRY[ADF Retry Policy]
+    FAIL[Failure Detected]
+    LOG_ERR[Log Error (ops_error_log)]
+    ALERT[Send Alert (Email/Teams)]
+    OPS_INV[Ops Team Investigation]
+    RERUN[Manual Pipeline Re-Run]
+
+    ADF_PIPE --> COPY_MES
+    COPY_MES -->|Success| ADF_PIPE
+    COPY_MES -->|Failure| RETRY
+    RETRY -->|Retries Exhausted| FAIL
+    FAIL --> LOG_ERR --> ALERT --> OPS_INV --> RERUN --> ADF_PIPE
+```
+
+##### 8.5.2 Transformation Failure Flow (Databricks Notebooks)
+
+**Scenario:** Silver transformation fails due to unexpected schema change in MES (new column added).
+
+**Step-by-step flow:**  
+1. **Notebook_silver_production** reads `bronze_mes_production` and encounters a new column or incompatible data type.  
+2. Spark job fails with a schema mismatch error.  
+3. Databricks job is marked as **Failed** and returns error details to ADF.  
+4. ADF **Notebook Activity OnFailure** path executes:  
+   - Logs error to `ops_error_log` with job_name, notebook_path, error_message, stack_trace_snippet.  
+   - Sends alert to data engineering team with notebook link and error details.  
+5. **Isolation of Bad Data**:  
+   - Bronze table remains intact; Silver tables are not partially updated due to Delta’s ACID guarantees.  
+   - Optionally, a **quarantine table** (`bronze_mes_quarantine`) is populated with problematic records for analysis.  
+6. **Fix & Re-Run**:  
+   - Data engineers update the notebook to handle the new column (e.g., add column mapping, default values, or schema evolution logic).  
+   - Re-run **Notebook_silver_production** for the affected window using a parameterized Databricks job (e.g., `window_start`, `window_end`).  
+7. **Verification**:  
+   - Validate record counts, data quality checks, and downstream impacts (e.g., OEE metrics).  
+   - Mark the error as **Resolved** in `ops_error_log`.
+
+**Transformation failure flow diagram:**
+
+```mermaid
+flowchart TD
+    NB_SIL_PROD[Databricks Notebook: silver_production_runs]
+    SCHEMA_ERR[Schema Mismatch / Runtime Error]
+    DBX_FAIL[Job Fails]
+    ADF_FAIL[ADF Notebook Activity Failure]
+    LOG_ERR[Log Error (ops_error_log)]
+    ALERT_DE[Alert Data Engineers]
+    FIX_NOTE[Update Notebook Logic]
+    RERUN_WIN[Re-run for Affected Window]
+    VERIFY[Validate Results]
+
+    NB_SIL_PROD -->|Error| SCHEMA_ERR --> DBX_FAIL --> ADF_FAIL
+    ADF_FAIL --> LOG_ERR --> ALERT_DE --> FIX_NOTE --> RERUN_WIN --> NB_SIL_PROD
+    NB_SIL_PROD --> VERIFY
+```
+
+##### 8.5.3 Data Quality Failure Flow (DQ Threshold Breach)
+
+**Scenario:** Sudden spike in scrap rate or missing quality tests triggers a data quality alert.
+
+**Step-by-step flow:**  
+1. As part of Silver/Gold transformations, **data quality checks** are executed (e.g., Great Expectations or custom Spark checks).  
+2. A check fails (e.g., `scrap_rate > 20%` or `>10% of quality tests missing for a plant in a day`).  
+3. The notebook writes a **DQ result record** to `dq_results` Delta table with:  
+   - check_name, entity_name, plant_id, date, actual_value, threshold, pass/fail.  
+4. If severity is **High**, the notebook raises an exception or sets a status flag.  
+5. ADF checks the notebook output (e.g., via `dbutils.notebook.exit` status) and:  
+   - Logs DQ failure in `ops_error_log`.  
+   - Sends alerts to both data engineering and quality teams.  
+6. Quality or operations teams investigate whether the issue is **data-related** (e.g., missing source files) or **real-world issue** (e.g., genuine quality problem).  
+7. If data issue: fix and re-run transformations. If real issue: trigger business processes (e.g., quality investigations, containment actions).
+
+**Data quality failure flow diagram:**
+
+```mermaid
+flowchart TD
+    NB_DQ[Silver/Gold Notebook with DQ Checks]
+    DQ_CHECKS[Run Data Quality Rules]
+    DQ_FAIL[DQ Threshold Breach]
+    DQ_RESULTS[Write dq_results Table]
+    LOG_ERR[Log DQ Failure]
+    ALERT_QA[Alert Quality & Data Teams]
+    ANALYZE_ROOT[Analyze Root Cause]
+    FIX_DATA[Fix Data / Re-run]
+    BUSINESS_ACTION[Business Response (e.g., Investigation)]
+
+    NB_DQ --> DQ_CHECKS -->|Pass| NB_DQ
+    DQ_CHECKS -->|Fail| DQ_FAIL --> DQ_RESULTS --> LOG_ERR --> ALERT_QA --> ANALYZE_ROOT
+    ANALYZE_ROOT -->|Data Issue| FIX_DATA --> NB_DQ
+    ANALYZE_ROOT -->|Real Issue| BUSINESS_ACTION
+```
+
+---
+
+#### 8.6 Backfill & Historical Reprocessing Flows
+
+Backfill and reprocessing flows are required when **historical data is first onboarded**, or when **business rules change** (e.g., new OEE formula, updated scrap classification).
+
+##### 8.6.1 Initial Historical Backfill Flow
+
+**Scenario:** Load 3 years of historical MES, SAP, Quality, and Energy data into the platform.
+
+**Step-by-step flow:**  
+1. **Backfill Planning**:  
+   - Define backfill scope (time range, plants, systems).  
+   - Estimate data volumes and required compute capacity.  
+   - Decide on **batch size** (e.g., monthly or weekly windows) to avoid overloading source systems.  
+2. **Backfill Pipelines (`pl_backfill_mes`, `pl_backfill_sap`, etc.)**:  
+   - Parameterized ADF pipelines accept `start_date` and `end_date`.  
+   - Use filters in Copy activities to extract historical slices.  
+   - Land data into dedicated backfill landing zones (e.g., `/landing_backfill/mes/`).  
+3. **Bronze Backfill Notebooks**:  
+   - Read backfill landing data and append to Bronze tables with `is_backfill = true` flag.  
+   - Ensure partitioning is aligned with historical dates.  
+4. **Silver/Gold Backfill Jobs**:  
+   - Run specialized backfill versions of Silver/Gold notebooks (or reuse same code with parameters).  
+   - Process historical windows sequentially or in parallel (per plant/month).  
+5. **Validation & Reconciliation**:  
+   - Compare record counts against source system reports.  
+   - Validate key metrics (e.g., yearly production totals, energy consumption) against official figures.  
+   - Document any known discrepancies.\n6. **Transition to Steady-State**:  
+   - Once backfill is complete, switch to regular incremental pipelines for ongoing operations.\n\n**Backfill flow diagram:**\n\n```mermaid\nflowchart TD\n    PLAN[Plan Backfill Scope & Strategy]\n    BF_ADF[ADF Backfill Pipelines]\n    BF_LANDING[Backfill Landing Zones]\n    BF_BRONZE[Databricks Backfill Bronze Load]\n    BF_SILVER[Databricks Backfill Silver]\n    BF_GOLD[Databricks Backfill Gold]\n    VALIDATE[Validate & Reconcile]\n    STEADY[Switch to Steady-State Pipelines]\n\n    PLAN --> BF_ADF --> BF_LANDING --> BF_BRONZE --> BF_SILVER --> BF_GOLD --> VALIDATE --> STEADY\n```\n\n##### 8.6.2 Business Rule Change Reprocessing Flow\n\n**Scenario:** New OEE calculation formula is introduced (e.g., updated definition of planned downtime).\n\n**Step-by-step flow:**  \n1. **Change Definition**: Document new OEE formula and business rules (e.g., reclassify some downtime codes).  \n2. **Versioned Logic**: Update `Notebook_gold_oee_mart` to support **versioned logic** (e.g., `oee_version` parameter).  \n3. **Impact Analysis**: Identify affected date range (e.g., last 12 months) and impacted Gold tables.  \n4. **Reprocessing Job**: Run Gold notebook in **reprocess mode** for the affected period:  \n   - Read existing Silver tables (no need to touch Bronze).  \n   - Recalculate OEE metrics using new rules.  \n   - Write to `fact_oee` with `oee_version` column (e.g., v1, v2).  \n5. **Coexistence Strategy**: Optionally keep both old and new versions for comparison during transition.  \n6. **Dashboard Update**: Update Power BI measures to use the new `oee_version` by default, with ability to compare versions.  \n7. **Communication**: Inform stakeholders of metric definition change and its impact on historical KPIs.\n\n**Reprocessing flow diagram:**\n\n```mermaid\nflowchart TD\n    DEFINE[Define New Business Rules]\n    UPDATE_NB[Update Gold Notebook Logic]\n    ANALYZE[Impact Analysis]\n    REPROCESS[Run Reprocessing Job]\n    WRITE_GOLD[Write Updated Gold Tables]\n    UPDATE_PBI[Update Power BI Measures]\n    COMM[Communicate Changes]\n\n    DEFINE --> UPDATE_NB --> ANALYZE --> REPROCESS --> WRITE_GOLD --> UPDATE_PBI --> COMM\n```\n\n---\n\n#### 8.7 CI/CD & Environment Promotion Flows\n\nTo ensure consistent and controlled deployments across **Dev, Test, and Prod** environments, the platform follows a CI/CD-driven promotion flow.\n\n##### 8.7.1 CI/CD Pipeline Overview\n\n**Components Under Version Control:**\n- **ADF Assets**: Pipelines, datasets, linked services (exported as ARM/Bicep templates or managed via YAML)\n- **Databricks Notebooks / Jobs**: Stored in a Git repository (e.g., Azure DevOps, GitHub) and synced with Databricks Repos\n- **Infrastructure as Code (IaC)**: Bicep/Terraform templates for ADLS, Event Hub, Databricks workspaces, Purview\n- **Power BI**: PBIX files or Fabric workspace definitions (if applicable)\n\n**CI/CD Flow:**\n1. **Developer Workflow**:  
+   - Develop ADF pipelines and Databricks notebooks in **Dev** environment.  
+   - Use feature branches in Git for new capabilities.  
+2. **Pull Request & Code Review**:  
+   - Submit PRs for review; enforce code review, linting, and automated tests (where applicable).  
+3. **CI Build Pipeline**:  
+   - Validate ARM/Bicep/Terraform templates.  
+   - Run unit tests for transformation logic (e.g., PySpark unit tests).  
+   - Package ADF and Databricks assets for deployment.  
+4. **CD Release Pipeline**:  
+   - Deploy to **Test** environment using parameterized templates (different resource names, connections).  
+   - Run integration tests and data validation checks.  
+   - After sign-off, promote to **Prod** via controlled release stage.  
+5. **Rollback Strategy**:  
+   - Maintain versioned deployments; allow rollback to previous stable version in case of critical issues.\n\n**CI/CD flow diagram:**\n\n```mermaid\nflowchart TD\n    DEV[Dev Environment]\n    FEATURE[Feature Branch Dev]\n    PR[Pull Request & Code Review]\n    CI[CI Pipeline: Build & Test]\n    ARTIFACTS[Deployable Artifacts]\n    TEST_ENV[Test Environment]\n    TESTS[Integration & DQ Tests]\n    APPROVAL[Business / QA Approval]\n    PROD_ENV[Prod Environment]\n    MONITOR[Monitor & Rollback]\n\n    DEV --> FEATURE --> PR --> CI --> ARTIFACTS --> TEST_ENV --> TESTS --> APPROVAL --> PROD_ENV --> MONITOR\n```\n\nThese additional flows make the Saint-Gobain platform design **operationally complete**, covering not only the happy path but also failure handling, historical backfill, business rule reprocessing, and CI/CD-driven environment promotion.\n*** End Patch```}итесьAssistant to=functions.apply_patch	RTLRassistant to=functions.apply_patchезидuentsjson  المدرس to=functions.apply_patch_embeddings and colleges get  Expand content and Directeurий. Let's ಖhola:
 
