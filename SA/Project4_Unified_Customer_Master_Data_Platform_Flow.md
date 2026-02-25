@@ -36,16 +36,20 @@ flowchart LR
     PARTNER[Partner feeds]
   end
 
-  subgraph Ingest
-    ADF[ADF / Pipelines]
-    SHIR[Self-hosted IR (if on-prem)]
+  subgraph Ingest[Ingestion (multiple paths)]
+    ADF[ADF pipelines\nCopy/CDC/API]
+    SHIR[Self-hosted IR\n(if on-prem)]
+    EH[Event Hubs / Kafka\n(optional streaming)]
+    SFTP[SFTP/Files\n(optional)]
   end
 
-  subgraph Lakehouse
-    ADLS[(ADLS Gen2)]
-    BR[Bronze: raw]
-    SL[Silver: standardized]
-    GL[Gold: mastered]
+  subgraph Lakehouse[Databricks Medallion Lakehouse]
+    ADLS[(ADLS Gen2 / OneLake)]
+    UC[Unity Catalog\n(governance)]
+    DLT[DLT / Jobs\n(Auto Loader)]
+    BR[Bronze Delta\nraw + audit]
+    SL[Silver Delta\nstandardized]
+    GL[Gold Delta\nmastered]
   end
 
   subgraph Mastering
@@ -63,21 +67,28 @@ flowchart LR
     CAT[Catalog/Lineage (Purview)]
   end
 
-  Sources --> Ingest
-  CRM --> ADF
-  ERP --> ADF
-  WEB --> ADF
-  SUPPORT --> ADF
-  BILL --> ADF
-  PARTNER --> ADF
+  Sources --> Ingest --> ADLS
   SHIR --> ADF
-  ADF --> ADLS --> BR --> SL
+  EH --> ADLS
+  SFTP --> ADLS
+  ADF --> ADLS
+
+  ADLS --> DLT --> BR --> SL --> GL
+  UC --- BR
+  UC --- SL
+  UC --- GL
+
   SL --> DQ --> ID --> MR --> SCD --> GL
   GL --> DW --> PBI
   GL --> API
   GL --> EVT
   GL --> CAT
 ```
+
+### Databricks Medallion architecture (Bronze → Silver → Gold)
+- **Bronze (raw)**: store each source extract as Delta with lineage metadata (source, run id, ingestion timestamp).
+- **Silver (standardized)**: normalize identities, enforce DQ rules, and conform keys across systems.
+- **Gold (mastered)**: publish golden customer tables + crosswalk + history as the governed contract for analytics and APIs.
 
 ### Detailed flow diagrams
 ```mermaid

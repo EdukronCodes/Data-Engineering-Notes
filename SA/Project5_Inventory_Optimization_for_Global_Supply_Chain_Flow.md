@@ -27,29 +27,35 @@ Optimize global inventory (multi-echelon) by combining demand signals, lead time
 ```mermaid
 flowchart LR
   subgraph Sources
-    ERP[ERP: orders, shipments, purchase orders]
-    WMS[WMS: on-hand, movements]
-    TMS[TMS: transit status]
-    SUP[Supplier: lead times, capacity]
-    DEM[Demand signals: sales/POS/forecast]
-    COST[Costs: holding, ordering, shortage]
-    CAL[Calendars/holidays]
-    MDM[Item/location master data]
+    ERP[ERP\norders, shipments, purchase orders]
+    WMS[WMS\non-hand, movements]
+    TMS[TMS\nin-transit status]
+    SUP[Supplier portal\nlead times, capacity, ASNs]
+    DEM[Demand signals\nsales/POS/forecast]
+    COST[Finance\nholding, ordering, shortage costs]
+    CAL[Calendar\nholidays, fiscal periods]
+    MDM[MDM\nitem, location, UoM]
+    EXT[External\nweather, port delays (optional)]
   end
 
-  subgraph Ingest
-    ADF[ADF / Pipelines]
+  subgraph Ingest[Ingestion (multiple paths)]
+    ADF[ADF pipelines\nCopy/CDC/API]
+    SHIR[Self-hosted IR\n(if on-prem)]
+    EH[Event Hubs / Kafka\n(optional streaming)]
+    SFTP[SFTP/Files\n(optional)]
   end
 
-  subgraph Lakehouse
-    ADLS[(ADLS Gen2)]
-    BR[Bronze]
-    SL[Silver]
-    GL[Gold: planning marts]
+  subgraph Lakehouse[Databricks Medallion Lakehouse]
+    ADLS[(ADLS Gen2 / OneLake)]
+    UC[Unity Catalog\n(governance)]
+    BR[Bronze Delta tables\nraw + audit]
+    SL[Silver Delta tables\ncleaned + conformed]
+    GL[Gold Delta tables\nplanning marts]
+    DLT[DLT / Jobs\n(Auto Loader)]
   end
 
   subgraph Optimization
-    DBX[Databricks/Spark]
+    DBX[Databricks compute\n(Spark/SQL)]
     RULES[Business rules + constraints]
     OPT[Optimization engine\n(heuristics/MIP as needed)]
     SIM[What-if scenarios]
@@ -63,12 +69,33 @@ flowchart LR
     MON[Monitoring/Alerts]
   end
 
-  Sources --> Ingest --> ADLS --> BR --> SL --> GL
+  Sources --> Ingest --> ADLS
+  ADF --> ADLS
+  SHIR --> ADF
+  EH --> ADLS
+  SFTP --> ADLS
+
+  ADLS --> DLT --> BR --> SL --> GL
+  UC --- BR
+  UC --- SL
+  UC --- GL
+
   GL --> DBX --> RULES --> OPT --> SIM --> DW
   DW --> PBI
   DW --> API --> WB
   OPT --> MON
 ```
+
+### Databricks Medallion architecture (Bronze → Silver → Gold)
+- **Bronze (raw)**:
+  - Store source extracts *as-is* in Delta with ingestion metadata (source system, load/run id, file date, watermark window).
+  - Keep schemas flexible to handle source drift; do not apply business rules here.
+- **Silver (conformed)**:
+  - Standardize keys (item/location), units of measure, currencies, time zones, and statuses.
+  - Apply DQ checks (e.g., negative on-hand, invalid statuses, missing lead times) and quarantine failures.
+- **Gold (planning marts)**:
+  - Publish analytics/planning-ready tables like `inventory_position`, `demand_plan`, `supply_plan`, `lead_time_profile`, `item_location_params`.
+  - These Gold tables are the “contract” consumed by optimization, BI, and write-back processes.
 
 ### Detailed flow diagrams
 ```mermaid
@@ -104,6 +131,43 @@ flowchart TD
     BI --> FB[Feedback\n(actual outcomes)]
     FB --> GL
   end
+```
+
+```mermaid
+flowchart LR
+  subgraph MultiSource[Multi-source ingestion]
+    DB[(ERP/WMS DBs)] --> ADF1[ADF Copy/CDC]
+    API1[Supplier API] --> ADF2[ADF REST]
+    FILES[SFTP files] --> ADF3[ADF SFTP]
+    STREAM[Events\nshipments/POS] --> EH2[Event Hubs/Kafka]
+  end
+
+  subgraph Bronze[Bronze Delta]
+    LND[(Landing zone)] --> AL[Auto Loader / DLT]
+    AL --> B1[bronze_inventory_raw]
+    AL --> B2[bronze_orders_raw]
+    AL --> B3[bronze_shipments_raw]
+    AL --> B4[bronze_leadtime_raw]
+  end
+
+  subgraph Silver[Silver Delta]
+    B1 --> S1[silver_inventory]
+    B2 --> S2[silver_orders]
+    B3 --> S3[silver_shipments]
+    B4 --> S4[silver_leadtime]
+  end
+
+  subgraph Gold[Gold planning marts]
+    S1 --> G1[inventory_position]
+    S2 --> G2[supply_plan]
+    S3 --> G3[in_transit_position]
+    S4 --> G4[lead_time_profile]
+  end
+
+  ADF1 --> LND
+  ADF2 --> LND
+  ADF3 --> LND
+  EH2 --> LND
 ```
 
 ```mermaid

@@ -17,6 +17,96 @@ Migrate on-premises **SSIS** workloads to Azure with improved observability, sec
 - Enable incremental loading (watermarks/CDC) and reproducible backfills with run-id patterns.
 - Decommission legacy schedules/servers once reconciliation and parallel-run sign-off completes.
 
+### Theory (core concepts behind SSIS → ADF migrations)
+
+### ETL vs ELT (and why migrations often change the pattern)
+- **SSIS is typically ETL-heavy**: extract → transform in SSIS data flow → load.
+- **Cloud platforms often favor ELT**:
+  - Extract + land raw data (Bronze)
+  - Transform closer to the storage/compute engine (SQL/Spark) into Silver/Gold
+- **Why ELT wins in Azure**:
+  - Better scalability for large joins/aggregations (Spark/SQL engines)
+  - Clear separation of concerns (ingest vs transform vs publish)
+  - Easier replay/backfill (because raw data is retained)
+
+### Incremental loading theory: watermarks vs CDC
+- **Watermarking**: load rows where `LastModifiedDate > last_watermark`.
+  - Simple and common, but depends on reliable “last modified” columns.
+  - Edge case: late updates and time precision → can miss/duplicate rows without overlap windows.
+- **CDC (Change Data Capture)**: read inserts/updates/deletes from change logs.
+  - More complete change tracking, but needs source support and operational setup.
+- **Practical best practice**:
+  - Use a small **overlap window** (e.g., reprocess last N minutes/hours) + MERGE, or
+  - Use CDC where correctness is critical and supported.
+
+### Idempotency and replay (the difference between “rerun” and “rebuild”)
+- **Idempotent pipeline**: running the same logical load twice produces the same final state.
+- Common idempotency techniques:
+  - **Partition overwrite** for time-partitioned facts (rebuild a defined window)
+  - **MERGE/upsert** for late-arriving corrections
+  - **Run-id isolation** in landing so failed runs don’t corrupt successful outputs
+- **Replay**: re-run a bounded window (e.g., last 7 days).
+- **Rebuild**: regenerate downstream layers from upstream truth (e.g., rebuild Gold from Silver).
+
+### Medallion architecture theory (Bronze/Silver/Gold as contracts)
+- **Bronze** (raw truth):
+  - Highest replay value; keep “as received” plus ingestion metadata.
+  - Supports audit, investigations, and reprocessing.
+- **Silver** (conformed truth):
+  - Enforces data types, keys, reference mappings, and quality rules.
+  - Makes downstream behavior stable (fewer surprises).
+- **Gold** (business contract):
+  - What downstream users and apps should depend on.
+  - In migrations, Gold becomes the **cutover contract**: “new system equals old system.”
+
+### Data quality theory (what to check and why)
+- DQ dimensions:
+  - **Freshness** (is it on time?), **completeness**, **validity**, **uniqueness**, **consistency**, **accuracy** (hardest).
+- In migration projects:
+  - Start with **freshness + volume + schema drift** (fast wins).
+  - Add **business-rule DQ** where it matters most (critical dimensions/facts).
+- Treat DQ failures as **routable outcomes**:
+  - Pass → continue
+  - Fail-soft → quarantine + continue with warnings (for non-critical feeds)
+  - Fail-hard → stop + alert (for critical feeds)
+
+### Orchestration theory (why “dependency by data readiness” beats “dependency by job chaining”)
+- **Job chaining** (common in SSIS): package A succeeds → package B runs.
+  - Fragile when reruns/backfills happen or when partial loads occur.
+- **Data readiness**: downstream runs when upstream datasets are “ready” for a given business date/run id.
+  - Better for parallelism, replay, and correctness.
+  - Enables SLA-based orchestration (wait with timeout, then escalate).
+
+### Schema drift theory (why it breaks pipelines and how to design for it)
+- Drift types:
+  - Add column, rename column, widen type, change meaning, change keys.
+- Strategies:
+  - Bronze allows drift; Silver enforces contracts with controlled evolution.
+  - Add drift detection alerts (sudden new columns/nullable changes).
+  - Define a simple “schema change process” with owners and approvals.
+
+### Observability theory (metrics you need to operate at scale)
+- At minimum capture per entity/run:
+  - **rows_read**, **rows_written**, **duration**, **status**, **watermark window**, **error codes**
+- Alert on:
+  - failures, SLA breaches, missing runs, volume anomalies, freshness breaches
+- The goal is to move from “log viewing” to **metrics-based operations**.
+
+### Security theory (least privilege and secretless patterns)
+- Prefer **managed identity** over secrets; use Key Vault only where unavoidable.
+- Apply **least privilege**:
+  - Source access scoped to required schemas/tables
+  - Storage access scoped to required containers/folders
+- Separate environments (Dev/Test/Prod) to reduce blast radius.
+
+### Cutover theory (how to prove equivalence)
+- “Equivalence” is not only row counts:
+  - Include aggregates by business keys and time, and checksums for critical tables.
+- Parallel run needs:
+  - fixed scope, frozen logic, and documented reconciliation evidence.
+- When cutover happens:
+  - keep hypercare, strict change control, and a rollback plan (even if rarely used).
+
 ### Migration decision tree (choose the main path per package)
 - **A) Lift-and-shift** (fastest time-to-cloud):
   - Keep SSIS packages, run them on **Azure-SSIS Integration Runtime**
@@ -179,12 +269,17 @@ flowchart LR
     VPN[VPN/ExpressRoute]
   end
 
-  subgraph Azure
+  subgraph Azure[Azure platform (Medallion-ready)]
     KV[Key Vault]
-    ADF[Azure Data Factory]
+    ADF[Azure Data Factory\nCopy/CDC/API]
     SSISIR[Azure-SSIS IR (optional)]
-    ADLS[(ADLS Gen2: Landing/Raw)]
-    DBX[Databricks / Spark (optional)]
+    ADLS[(ADLS Gen2 / OneLake\nLanding)]
+    UC[Unity Catalog\n(governance)]
+    DLT[DLT / Jobs\n(Auto Loader)]
+    BR[Bronze Delta\nraw + audit]
+    SL[Silver Delta\nconformed]
+    GL[Gold Delta\ncurated]
+    DBX[Databricks compute\n(Spark/SQL)]
     SQL[(Azure SQL / Synapse / DW)]
     MON[Azure Monitor + Log Analytics]
   end
@@ -193,14 +288,25 @@ flowchart LR
   VPN --- SHIR
   ADF --> KV
   SHIR --> ADF
-  ADF -->|Copy to Landing| ADLS
+  ADF -->|Copy/CDC to Landing| ADLS
   SSIS -->|Lift & shift| SSISIR
   SSISIR --> ADLS
-  ADLS --> DBX --> SQL
+
+  ADLS --> DLT --> BR --> SL --> GL
+  UC --- BR
+  UC --- SL
+  UC --- GL
+
+  GL --> DBX --> SQL
   ADF --> SQL
   ADF --> MON
   SSISIR --> MON
 ```
+
+### Databricks Medallion architecture (Bronze → Silver → Gold) for migration
+- **Bronze (raw)**: land extracted SSIS/ADF outputs with run ids/watermarks (supports replay and audit).
+- **Silver (conformed)**: standardize schemas, keys, and quality rules so downstream loads are consistent.
+- **Gold (curated)**: publish stable tables/views for reporting and downstream apps; treat Gold as the contract for cutover sign-off.
 
 ### Detailed workflows (execution-level)
 

@@ -36,20 +36,24 @@ flowchart LR
     MDM[Product & store master data]
   end
 
-  subgraph Ingest
-    ADF[Azure Data Factory / Synapse Pipelines]
-    EH[Event Hubs (optional streaming)]
+  subgraph Ingest[Ingestion (multiple paths)]
+    ADF[ADF / Synapse Pipelines\nCopy/CDC/API]
+    SHIR[Self-hosted IR\n(if on-prem)]
+    EH[Event Hubs / Kafka\n(optional streaming)]
+    SFTP[SFTP/Files\n(optional)]
   end
 
-  subgraph Lakehouse
-    ADLS[(ADLS Gen2)]
-    BR[Bronze: raw]
-    SL[Silver: cleaned/conformed]
-    GL[Gold: marts/features]
+  subgraph Lakehouse[Databricks Medallion Lakehouse]
+    ADLS[(ADLS Gen2 / OneLake)]
+    UC[Unity Catalog\n(governance)]
+    DLT[DLT / Jobs\n(Auto Loader)]
+    BR[Bronze Delta\nraw + audit]
+    SL[Silver Delta\ncleaned + conformed]
+    GL[Gold Delta\nmarts + features]
   end
 
   subgraph Compute
-    DBX[Databricks / Spark]
+    DBX[Databricks compute\n(Spark/SQL)]
     DQ[Data Quality checks]
     FS[Feature store (Delta / AML Feature Store)]
   end
@@ -68,17 +72,17 @@ flowchart LR
     WB[Write-back to planning system]
   end
 
-  Sources --> Ingest
-  POS --> ADF
-  ERP --> ADF
-  INV --> ADF
-  PROMO --> ADF
-  CAL --> ADF
-  EXT --> ADF
-  MDM --> ADF
+  Sources --> Ingest --> ADLS
+  SHIR --> ADF
   EH --> ADLS
+  SFTP --> ADLS
   ADF --> ADLS
-  ADLS --> BR --> SL --> GL
+
+  ADLS --> DLT --> BR --> SL --> GL
+  UC --- BR
+  UC --- SL
+  UC --- GL
+
   SL --> DBX --> DQ --> GL
   GL --> FS --> AML --> REG --> SCORE --> DW
   SCORE --> MON
@@ -86,6 +90,11 @@ flowchart LR
   DW --> API
   API --> WB
 ```
+
+### Databricks Medallion architecture (Bronze → Silver → Gold)
+- **Bronze (raw)**: land all source extracts as Delta with run ids/watermarks and minimal transformation.
+- **Silver (conformed)**: standardize keys, calendars, units, and apply DQ gates so ML uses trusted inputs.
+- **Gold (features + marts)**: publish versioned feature tables and forecast marts that downstream scoring/BI can consume reliably.
 
 ### Detailed flow diagrams
 ```mermaid

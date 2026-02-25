@@ -25,6 +25,48 @@ Design and implement DR/BC so the data platform meets agreed **RTO/RPO**, suppor
 - **Governance & security**: Key Vault, Entra ID, Purview, networking (VNet/Private Endpoints)
 - **Observability**: Log Analytics, Azure Monitor alerts, dashboards
 
+### Medallion architecture view (Bronze → Silver → Gold) in a DR context
+In DR/BC, the Medallion pattern helps because you can clearly define what must be recoverable:
+- **Bronze**: raw ingested data + run-id/watermark metadata (enables replay)
+- **Silver**: conformed/validated datasets (enables consistent downstream rebuild)
+- **Gold**: business-critical curated outputs (dashboards/APIs) that often drive RTO commitments
+
+```mermaid
+flowchart LR
+  subgraph Primary[Primary region - Databricks lakehouse]
+    P_LND[(Landing)]
+    P_BR[Bronze Delta\nraw + audit]
+    P_SL[Silver Delta\nclean + conformed]
+    P_GL[Gold Delta\ncurated outputs]
+    P_UC[Unity Catalog]
+    P_DLT[DLT/Jobs]
+  end
+
+  subgraph Secondary[Secondary region - DR lakehouse]
+    S_LND[(Landing)]
+    S_BR[Bronze Delta]
+    S_SL[Silver Delta]
+    S_GL[Gold Delta]
+    S_UC[Unity Catalog]
+    S_DLT[DLT/Jobs]
+  end
+
+  P_LND --> P_DLT --> P_BR --> P_SL --> P_GL
+  P_UC --- P_BR
+  P_UC --- P_SL
+  P_UC --- P_GL
+
+  P_LND <-->|replicate/copy| S_LND
+  P_BR <-->|replicate| S_BR
+  P_SL <-->|replicate| S_SL
+  P_GL <-->|replicate| S_GL
+
+  S_LND --> S_DLT --> S_BR --> S_SL --> S_GL
+  S_UC --- S_BR
+  S_UC --- S_SL
+  S_UC --- S_GL
+```
+
 ### DR strategy — pick the platform tier
 - **Backup/Restore (cheapest)**: restore from backups; higher RTO
 - **Pilot Light**: minimal secondary footprint; scale up on failover
