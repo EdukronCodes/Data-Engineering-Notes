@@ -1,5 +1,12 @@
 ### Project 5 — Inventory Optimization for Global Supply Chain (Flow)
 
+### Spoken English overview (3 short paragraphs)
+This project is about having the right stock, in the right place, at the right time—without tying up too much money in inventory. In a global supply chain, demand changes, lead times vary, shipments get delayed, and planners end up firefighting. So the goal is to turn all those signals into clear replenishment decisions that are consistent and measurable.
+
+The platform brings together inventory positions, open orders, forecasts/actual demand, supplier lead times, and cost/service targets. Then it builds planning-ready tables and runs an optimization step that recommends what to buy or move, how much safety stock to hold, and which items are at risk of stockouts or expiry. The most important part is that recommendations are explainable—planners should see why the system suggested something.
+
+Finally, we publish the outputs to dashboards and write-back interfaces, and we measure whether the recommendations actually improved outcomes. If override rates are high or stockouts don’t improve, we adjust parameters, segmentation, or constraints. Over time, this becomes a continuous improvement loop rather than a one-time “optimization project.”
+
 ### Goal
 Optimize global inventory (multi-echelon) by combining demand signals, lead times, constraints, and cost/service targets to produce **replenishment recommendations**, **safety stock**, and **exception management** with traceable KPIs.
 
@@ -61,6 +68,59 @@ flowchart LR
   DW --> PBI
   DW --> API --> WB
   OPT --> MON
+```
+
+### Detailed flow diagrams
+```mermaid
+flowchart TD
+  subgraph Data[Planning data build]
+    S[ERP/WMS/TMS/Suppliers/Demand/MDM] --> BR[Bronze]
+    BR --> SL[Silver\nconformed keys + UoM]
+    SL --> IP[inventory_position]
+    SL --> DP[demand_plan]
+    SL --> SP[supply_plan]
+    SL --> LT[lead_time_profile]
+    SL --> PAR[item_location_params]
+    IP --> GL[Gold planning marts]
+    DP --> GL
+    SP --> GL
+    LT --> GL
+    PAR --> GL
+  end
+
+  subgraph Engine[Optimization]
+    GL --> SEG[Segmentation\nABC/XYZ/criticality]
+    SEG --> POL[Policy selection\n(min-max, EOQ, periodic)]
+    POL --> OPT[Optimization run\nconstraints + objective]
+    OPT --> REC[Recommendations\nROQ/SS/ROP]
+    OPT --> EXC[Exceptions\nstockout/expiry/capacity]
+  end
+
+  subgraph Publish[Publish + learn]
+    REC --> DW[DW/Delta outputs]
+    EXC --> DW
+    DW --> WB[Write-back/exports]
+    DW --> BI[Dashboards]
+    BI --> FB[Feedback\n(actual outcomes)]
+    FB --> GL
+  end
+```
+
+```mermaid
+sequenceDiagram
+  participant Plan as Planner
+  participant Sys as Optimization platform
+  participant ERP as ERP/APS
+  participant BI as Dashboards
+
+  Sys->>Sys: Build planning marts (snapshot inputs)
+  Sys->>Sys: Run optimization (scenario: baseline)
+  Sys-->>BI: Publish recommendations + exceptions
+  Plan->>BI: Review exceptions and drivers
+  Plan->>Sys: Approve / override / create scenario
+  Sys->>ERP: Write-back proposals (controlled)
+  ERP-->>Sys: Return execution status + receipts
+  Sys-->>BI: Track KPIs (stockouts, turns, overrides)
 ```
 
 ### End-to-end flow (detailed)

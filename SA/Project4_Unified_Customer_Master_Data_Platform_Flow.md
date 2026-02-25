@@ -1,5 +1,12 @@
 ### Project 4 — Unified Customer Master Data Platform (Flow)
 
+### Spoken English overview (3 short paragraphs)
+This project is about stopping the “which customer record is correct?” problem. In most companies, the same customer exists in CRM, ERP, billing, support, and web systems—and each system has partial or outdated information. So people waste time reconciling duplicates, and downstream analytics and campaigns become unreliable.
+
+What we build here is a customer master platform that pulls customer data from all those sources, cleans it, checks quality, and then matches records that belong to the same real-world person or organization. After that, we apply survivorship rules so we create one golden profile, while still keeping the links back to the original source IDs so everything stays auditable.
+
+The key outcome is trust and reuse. Analytics teams get a clean customer dimension with history, operational teams can query a customer master API, and the business can track data quality and matching performance over time. And because merges and splits happen in real life, the platform keeps a proper audit trail and stewardship workflow to manage edge cases safely.
+
 ### Goal
 Create a governed, enterprise-grade **golden customer record** by unifying customer data across source systems, resolving identities, enforcing data quality, and publishing mastered customer profiles to analytics and operational applications.
 
@@ -70,6 +77,76 @@ flowchart LR
   GL --> API
   GL --> EVT
   GL --> CAT
+```
+
+### Detailed flow diagrams
+```mermaid
+flowchart TD
+  subgraph Ingest[Ingest + standardize]
+    S[Source systems] --> BR[Bronze raw]
+    BR --> SL[Silver standardized]
+  end
+
+  subgraph Quality[Quality + mastering]
+    SL --> DQ[Data quality rules]
+    DQ -->|pass| CAND[Candidate matching]
+    DQ -->|fail| Q[Quarantine + stewardship queue]
+    CAND --> CLUS[Match clusters + scores]
+    CLUS --> SURV[Survivorship\n(field-level winners)]
+    SURV --> GOLD[Gold golden profiles]
+    GOLD --> XREF[Crosswalk\n(source_id -> party_id)]
+    GOLD --> HIST[SCD2 history + audit]
+  end
+
+  subgraph Publish[Publish]
+    GOLD --> DW[DW/semantic model]
+    GOLD --> API[Customer Master API]
+    GOLD --> EVT[Change events]
+  end
+```
+
+```mermaid
+erDiagram
+  GOLD_PARTY ||--o{ PARTY_XREF : has
+  GOLD_PARTY ||--o{ CONTACT_POINT : has
+  GOLD_PARTY ||--o{ PARTY_RELATIONSHIP : has
+  GOLD_PARTY ||--o{ GOLD_PARTY_HIST : versions
+  MATCH_DECISION ||--o{ PARTY_XREF : supports
+
+  GOLD_PARTY {
+    string party_id PK
+    string party_type
+    string legal_name
+    string display_name
+    string status
+  }
+  PARTY_XREF {
+    string party_id FK
+    string source_system
+    string source_customer_id
+    float match_score
+  }
+  CONTACT_POINT {
+    string party_id FK
+    string type
+    string value
+    string is_primary
+  }
+  PARTY_RELATIONSHIP {
+    string from_party_id FK
+    string to_party_id FK
+    string relationship_type
+  }
+  GOLD_PARTY_HIST {
+    string party_id FK
+    datetime effective_from
+    datetime effective_to
+  }
+  MATCH_DECISION {
+    string decision_id PK
+    string rule_set_version
+    datetime decided_at
+  }
 ```
 
 ### End-to-end platform flow (detailed)

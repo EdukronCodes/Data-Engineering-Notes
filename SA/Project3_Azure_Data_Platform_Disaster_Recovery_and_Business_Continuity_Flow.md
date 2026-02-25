@@ -1,5 +1,12 @@
 ### Project 3 — Azure data platform disaster recovery (DR) and business continuity (BC) setup (Flow)
 
+### Spoken English overview (3 short paragraphs)
+This project is about making sure the data platform doesn’t become a single point of failure for the business. If a region goes down, a critical service degrades, or someone accidentally deletes data, we still need a clear way to recover quickly and keep the most important reports and pipelines running.
+
+The practical way to do that is to separate the platform into “things you can redeploy” and “things you must protect.” Pipelines and compute can usually be recreated in another region with IaC and CI/CD, but the data lake and databases need replication, backups, and tested recovery steps. DR becomes a combination of automation plus a runbook that people can actually follow during an incident.
+
+In the end, DR is only real if it’s tested. So we define RTO/RPO targets, implement failover and failback procedures, and then run drills where we measure how long it takes, whether data checks pass, and what broke. Every drill produces improvements so the next one is faster and safer.
+
 ### Goal
 Design and implement DR/BC so the data platform meets agreed **RTO/RPO**, supports controlled **failover/failback**, and can be operated reliably under incident conditions with validated runbooks and regular DR drills.
 
@@ -51,6 +58,29 @@ flowchart LR
   A_ADF -. IaC redeploy .-> B_ADF
   A_DBX -. IaC redeploy .-> B_DBX
   A_MON --> B_MON
+```
+
+### Detailed flow diagrams
+```mermaid
+flowchart TD
+  A[Define critical data products\n(dashboards/APIs/pipelines)] --> B[Set RTO/RPO targets]
+  B --> C[Classify components\nstateful vs stateless]
+  C --> D[Implement controls\nreplication/backups/IaC]
+  D --> E[Create runbooks\nfailover + failback + validation]
+  E --> F[DR drill execution]
+  F --> G[Measure outcomes\nRTO met? RPO met? validation passed?]
+  G --> H[Postmortem + backlog]
+  H --> D
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> Normal
+  Normal --> Degraded: Incident detected
+  Degraded --> DR_Mode: Declare DR + freeze writes\n(promote secondary)
+  DR_Mode --> Normal: Failback completed\n(resync + validate)
+  Degraded --> Normal: False alarm / recovered
+  DR_Mode --> Degraded: Secondary issues\n(escalate / partial service)
 ```
 
 ### Service-by-service DR patterns (practical)

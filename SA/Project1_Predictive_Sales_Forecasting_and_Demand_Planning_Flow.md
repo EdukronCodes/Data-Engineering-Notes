@@ -1,5 +1,12 @@
 ### Project 1 — Predictive sales forecasting and demand planning platform (Flow)
 
+### Spoken English overview (3 short paragraphs)
+Think of this project as building a “forecast factory” for the business. Instead of teams arguing over spreadsheets and different versions of the truth, we bring all the sales, inventory, promotions, and external signals into one place and use them to generate a consistent forecast every week (or every day), at the level planners actually need.
+
+The platform does two big things. First, it builds clean and trusted data (bronze → silver → gold) so everyone is working from the same numbers. Second, it trains and runs forecasting models in a repeatable way—so you can see which model version produced which forecast, why it changed, and how it performed once actual sales come in.
+
+The end result is a forecast that planners can use, explain, and improve. They get a baseline forecast, they can run scenarios like “what if we run a promo” or “what if supply is limited,” and they can override where it makes sense. And behind the scenes, the system monitors data quality and model drift so it keeps getting better over time.
+
 ### Goal
 Build an end-to-end platform that turns multi-source retail/CPG signals into **reliable forecasts** and **actionable demand plans**, with governed data, repeatable model training, and monitored production scoring.
 
@@ -78,6 +85,58 @@ flowchart LR
   DW --> PBI
   DW --> API
   API --> WB
+```
+
+### Detailed flow diagrams
+```mermaid
+flowchart TD
+  subgraph Data[Data pipeline]
+    S[Sources\n(POS/ERP/Inventory/Promo/External)] --> I[Ingest\nADF/Event Hubs]
+    I --> B[Bronze\nRaw + metadata]
+    B --> SV[Silver\nConformed + DQ]
+    SV --> G[Gold\nMarts + Features]
+  end
+
+  subgraph ML[ML lifecycle]
+    G --> FE[Feature store]
+    FE --> TR[Train + backtest\n(AML/Databricks)]
+    TR --> REG[Model registry]
+    REG --> SC[Batch scoring]
+    SC --> OUT[Forecast outputs\n(run-id/versioned)]
+  end
+
+  subgraph Use[Consumption]
+    OUT --> DW[Serving store\n(DW/Delta)]
+    DW --> PBI[Planner dashboards]
+    DW --> API[Forecast API]
+    API --> WB[Write-back/exports]
+  end
+
+  subgraph Feedback[Feedback loop]
+    ACT[Actuals arrive] --> EVAL[Accuracy + bias evaluation]
+    EVAL --> MON[Drift/performance monitoring]
+    MON -->|thresholds| TR
+  end
+
+  DW --> ACT
+```
+
+```mermaid
+sequenceDiagram
+  participant Or as Orchestrator (ADF)
+  participant Lake as Lakehouse (ADLS/Delta)
+  participant ML as ML pipelines (Train/Score)
+  participant Reg as Model registry
+  participant Serve as Serving (DW/API/BI)
+
+  Or->>Lake: Ingest sources to Bronze (run-id)
+  Or->>Lake: Transform to Silver + DQ gates
+  Or->>Lake: Build Gold marts + features
+  Or->>ML: Trigger training (schedule/drift)
+  ML->>Reg: Register model version + metadata
+  Or->>ML: Trigger batch scoring for horizon
+  ML->>Serve: Publish forecasts + scenario versions
+  Serve-->>Or: KPIs/alerts on failures or drift
 ```
 
 ### End-to-end data + ML flow (detailed)
