@@ -410,3 +410,220 @@ flowchart TD
 - Execute targeted replay for impacted partitions only.
 - Re-run reconciliation and validate top business KPIs before BI refresh.
 
+---
+
+### ADF phase-by-phase theory and metadata-driven pipeline (full notes)
+
+This section describes how to implement the project using a metadata-driven Azure Data Factory (ADF) design. The objective is to avoid hardcoded, source-specific pipelines and instead drive ingestion, transformation, and publishing behavior from control metadata tables. This approach scales across many sources and keeps operations consistent.
+
+At a high level, ADF acts as the orchestration layer, not the transformation engine for complex logic. ADF reads metadata, builds execution context per dataset, calls Databricks/Spark jobs for heavy transformations, and writes operational status back to control tables. The same orchestration template can run for telemetry, hierarchy, maintenance, inventory, and reference feeds with only metadata changes.
+
+#### ADF theory by phase
+
+##### Phase 1: Ingestion orchestration theory
+In this phase, ADF determines *what to run* and *how to run it* by querying metadata tables. It resolves source type (DB/API/file), load mode (full/incremental/CDC), watermark column, source/target paths, and dependency rules. The pipeline uses this resolved context to parameterize activities rather than branching with many hardcoded paths.
+
+The core principle is “configuration over code.” Instead of creating one pipeline per table/feed, ADF uses a master pipeline and loops over active metadata entries. This reduces duplication, speeds onboarding of new sources, and makes behavior auditable through metadata history.
+
+##### Phase 2: Landing and standardization theory
+ADF lands raw data into Bronze with immutable file conventions and run metadata. For simple copy patterns, ADF Copy activity is sufficient; for schema-heavy parsing, ADF can hand off to Databricks notebooks. The design ensures every load has a run id, ingestion timestamp, source id, and batch window for replay traceability.
+
+Once landed, ADF triggers quality checks and standardization paths (usually Databricks). The quality model should gate downstream execution: pass moves forward, fail routes to quarantine + alert. This guarantees bad data does not silently propagate into Silver/Gold.
+
+##### Phase 3: Business transform and curation theory
+ADF coordinates Silver and Gold transformations through notebook/job execution with run parameters (source name, date window, load type, replay flag). The same transformation code can support regular and replay runs if these controls are parameterized correctly.
+
+Gold publishing should only happen after validation + reconciliation checks pass. This phase introduces business conformance: stable conformed keys, standardized dimensions, and KPI facts aligned with dashboard consumption patterns.
+
+##### Phase 4: Observability and SLA theory
+ADF should persist execution telemetry for every stage: start/end time, rows read/written, status, error category, retry count, and watermark movement. These metrics feed operational dashboards and on-call runbooks.
+
+SLA theory: freshness SLA, completion SLA, and quality SLA are independent. A run may finish “on time” but still fail quality. The orchestration must reflect that distinction in status reporting to prevent false-green operations.
+
+---
+
+### Metadata-driven ADF architecture (control model)
+
+#### Recommended metadata/control tables
+
+1. **`md_source_system`**
+   - Stores source-level settings (`source_id`, `source_name`, `source_type`, auth reference, timezone, active flag).
+2. **`md_dataset_config`**
+   - Stores dataset rules (`dataset_id`, `source_id`, `object_name`, load_type, watermark_col, key_cols, schedule_group, priority).
+3. **`md_pipeline_mapping`**
+   - Maps datasets to pipeline/notebook names, target zones, and execution dependencies.
+4. **`md_quality_rules`**
+   - Stores rule definitions (rule_type, threshold, severity, quarantine behavior, critical flag).
+5. **`md_trigger_config`**
+   - Stores trigger settings (trigger_type, cron/tumbling window, event filters, concurrency, enabled).
+6. **`ops_pipeline_run`**
+   - Header run log (run_id, trigger_id, start/end, overall status, SLA status).
+7. **`ops_dataset_run`**
+   - Per-dataset execution metrics (rows_in, rows_out, watermark_before/after, retry_count, status, error_code).
+8. **`ops_quality_result`**
+   - Rule-level results (rule_id, pass/fail, failed_count, threshold_used, action_taken).
+9. **`ops_replay_request`**
+   - Controlled replay/backfill requests (dataset_id, start_date, end_date, reason, approved_by, status).
+
+#### Metadata-driven principles
+- Every pipeline activity reads runtime behavior from metadata.
+- New dataset onboarding should require only metadata inserts + optional notebook mapping.
+- Trigger behavior should be configurable by schedule group, not duplicated by pipeline cloning.
+- Replay and backfill should be a first-class path controlled via `ops_replay_request`.
+
+---
+
+### Full metadata-driven ADF flow (how it works end-to-end)
+
+```mermaid
+flowchart TD
+  T["ADF Trigger Fired"] --> M1["Master Pipeline Start"]
+  M1 --> C1["Read md_trigger_config + md_dataset_config"]
+  C1 --> C2["Build Execution List (active datasets, dependencies, priority)"]
+  C2 --> F1["ForEach Dataset (batch/concurrency controlled)"]
+
+  F1 --> I1["Resolve Runtime Params (load_type, watermark, paths)"]
+  I1 --> I2["Ingest to Bronze (Copy/Notebook)"]
+  I2 --> Q1["Run Quality Rules (md_quality_rules)"]
+  Q1 -->|Pass| S1["Run Silver Transform Notebook"]
+  Q1 -->|Fail| QX["Quarantine + ops_quality_result + Alert"]
+
+  S1 --> G1["Run Gold Transform Notebook"]
+  G1 --> R1["Reconciliation Checks"]
+  R1 -->|Pass| P1["Publish/Serve Gold Tables"]
+  R1 -->|Fail| RX["Mark Failed + Incident + Optional Replay Request"]
+
+  P1 --> O1["Write ops_dataset_run metrics"]
+  QX --> O1
+  RX --> O1
+  O1 --> O2["Aggregate ops_pipeline_run status"]
+  O2 --> B1["Trigger Power BI Refresh (if configured)"]
+  B1 --> E1["Pipeline Complete"]
+```
+
+#### Diagram explanation (execution mechanics)
+1. **Trigger starts master pipeline** and provides context (trigger type, run window, schedule group).
+2. **Master pipeline reads metadata** to select active datasets and resolve dependency order.
+3. **ForEach executes datasets** with controlled parallelism (for example, high-volume telemetry separate from low-volume reference loads).
+4. **Runtime parameters are resolved** per dataset: watermark boundaries, landing paths, load mode, retry policy.
+5. **Bronze ingest runs**, then quality rules execute from metadata-defined rule sets.
+6. **Pass path** proceeds to Silver then Gold transforms; **fail path** quarantines + alerts + logs rule failures.
+7. **Reconciliation gates publishing** so Gold is only served when checks are successful.
+8. **Operational metrics are logged** in `ops_*` tables for SLA and troubleshooting visibility.
+9. **Power BI refresh is conditional** on final run status and dataset-level readiness.
+
+---
+
+### ADF master pipeline design (logical modules)
+
+#### 1) `pl_master_orchestrator`
+- Reads metadata and initializes run context (`run_id`, `trigger_context`, `window_start/end`).
+- Calls child pipelines by zone/stage:
+  - `pl_ingest_bronze`
+  - `pl_quality_gate`
+  - `pl_transform_silver`
+  - `pl_transform_gold`
+  - `pl_publish_and_notify`
+
+#### 2) `pl_ingest_bronze`
+- Uses Copy activity or Databricks Notebook activity based on dataset metadata.
+- Handles full/incremental/CDC pattern by dynamic query/path generation.
+- Writes `ops_dataset_run` ingest metrics and watermark state.
+
+#### 3) `pl_quality_gate`
+- Reads `md_quality_rules` for dataset.
+- Executes rule checks and writes `ops_quality_result`.
+- Routes to pass/fail branches and controls continuation.
+
+#### 4) `pl_transform_silver` and `pl_transform_gold`
+- Executes notebooks/jobs with parameterized inputs.
+- Supports replay mode and idempotent writes.
+- Updates run metrics and reconciliation outputs.
+
+#### 5) `pl_publish_and_notify`
+- Marks final status per dataset and pipeline.
+- Sends notifications (mail/Teams/webhook/Event Grid).
+- Triggers Power BI refresh only when conditions are met.
+
+---
+
+### Trigger strategy (all trigger types and usage)
+
+ADF trigger design should separate *cadence* from *business criticality*. Not every dataset needs the same trigger type. A metadata-driven trigger strategy avoids unnecessary costs and reduces contention during peak windows.
+
+#### 1) Schedule trigger
+- Best for predictable daily/intraday loads.
+- Example: reference/inventory snapshot loads every 2 hours.
+- Controlled by cron-like schedule in `md_trigger_config`.
+
+#### 2) Tumbling window trigger
+- Best for strict time-window processing and guaranteed once-per-window semantics.
+- Example: hourly telemetry windows where each window must be tracked and replayable.
+- Supports dependency and backfill at window granularity.
+
+#### 3) Event trigger (storage events)
+- Best for file-arrival-driven ingestion.
+- Example: source drops maintenance extract file to landing container; pipeline starts on blob create.
+- Use file filters to avoid accidental trigger storms.
+
+#### 4) Manual/On-demand trigger
+- Best for support replay, hotfix validation, or controlled one-off runs.
+- Usually combined with `ops_replay_request` approval flow.
+
+#### 5) Chained trigger (pipeline completion driven)
+- Trigger downstream pipelines from upstream completion conditions.
+- Example: Gold pipeline triggers Power BI refresh pipeline only on pass status.
+
+#### Trigger governance notes
+- Keep trigger definitions in metadata where possible.
+- Add concurrency limits per trigger group to avoid cluster overload.
+- Define blackout windows for maintenance periods.
+- Store trigger execution context in `ops_pipeline_run` for audit.
+
+---
+
+### Replay/backfill flow (metadata controlled)
+
+```mermaid
+flowchart LR
+  A["Support/User raises replay request"] --> B["Insert ops_replay_request"]
+  B --> C["Approval + Validation of window"]
+  C --> D["Master Pipeline in replay mode"]
+  D --> E["Recompute Bronze->Silver->Gold for impacted partitions"]
+  E --> F["Reconciliation + KPI checks"]
+  F -->|Pass| G["Mark request complete + refresh Power BI"]
+  F -->|Fail| H["Keep request open + incident investigation"]
+```
+
+#### Replay operating model
+- Replay requests must include dataset, date range, reason, and approval.
+- Replay mode should bypass normal watermark advancement until success is confirmed.
+- Reconciliation should compare both technical metrics (row counts) and business KPIs.
+
+---
+
+### End-to-end trigger + pipeline timeline example
+
+1. Tumbling window trigger fires for `2026-05-27 10:00-11:00`.
+2. Master pipeline reads all active datasets in `telemetry_hourly` schedule group.
+3. Bronze ingest runs for telemetry + related reference snapshot.
+4. Quality gate checks schema, nulls, duplicates, and range thresholds.
+5. Silver transformation standardizes units/time/keys.
+6. Gold builds KPI facts and conformed dimensions.
+7. Reconciliation verifies row and KPI tolerances.
+8. Success status recorded in `ops_pipeline_run` and `ops_dataset_run`.
+9. Power BI dataset refresh starts and dashboard SLA status updates.
+
+---
+
+### Practical implementation checklist (ADF + metadata model)
+
+- Build metadata tables first; treat them as productized control plane.
+- Ensure every dataset has clear load type and watermark semantics.
+- Implement standard activity policies (retry, timeout, secure output logging).
+- Use consistent naming conventions for pipelines, parameters, and linked services.
+- Separate dev/test/prod metadata with environment tagging.
+- Add CI/CD for ADF artifacts and notebook version alignment.
+- Create operational dashboards on `ops_*` tables for run health and SLA tracking.
+
+
