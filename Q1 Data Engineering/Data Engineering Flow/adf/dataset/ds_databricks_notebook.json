@@ -1,0 +1,19 @@
+{
+  "name": "ds_databricks_notebook",
+  "properties": {
+    "description": "Databricks notebook path for medallion processing",
+    "linkedServiceName": {
+      "referenceName": "ls_databricks_retail",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "notebookPath": { "type": "String" }
+    },
+    "annotations": [],
+    "type": "DatabricksNotebook",
+    "typeProperties": {
+      "notebookPath": "@{dataset().notebookPath}"
+    }
+  },
+  "type": "Microsoft.DataFactory/factories/datasets"
+}

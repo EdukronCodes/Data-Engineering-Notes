@@ -1,0 +1,22 @@
+{
+  "name": "ls_adls_retail_sources",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "ADLS Gen2 source systems (simulated retail ERP/POS feeds)",
+    "annotations": [],
+    "type": "AzureBlobFS",
+    "typeProperties": {
+      "url": "@{linkedService().storageAccountUrl}"
+    },
+    "parameters": {
+      "storageAccountUrl": {
+        "type": "String",
+        "defaultValue": "https://stretailsourcesdev.dfs.core.windows.net"
+      }
+    },
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+# Azure DevOps CI/CD — validate artifacts and optionally deploy
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - adf/**
+      - databricks/**
+      - infra/**
+      - scripts/**
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - name: pythonVersion
+    value: '3.11'
+
+stages:
+  - stage: Validate
+    displayName: Validate artifacts
+    jobs:
+      - job: ValidateJson
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          - script: |
+              python -c "
+              import json, pathlib
+              root = pathlib.Path('.')
+              files = list(root.glob('adf/**/*.json')) + list(root.glob('databricks/jobs/*.json')) + list(root.glob('infra/*.json'))
+              for f in files:
+                  json.loads(f.read_text(encoding='utf-8'))
+                  print('OK', f)
+              print(f'Validated {len(files)} JSON files')
+              "
+            displayName: Validate JSON syntax
+
+          - script: python scripts/generate-sample-data.py
+            displayName: Generate sample retail data
+
+  - stage: DeployDev
+    displayName: Deploy to Dev (manual)
+    dependsOn: Validate
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployInfra
+        environment: retail-de-dev
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureCLI@2
+                  displayName: Deploy Bicep (optional — enable service connection)
+                  inputs:
+                    azureSubscription: $(AZURE_SERVICE_CONNECTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      echo "Configure AZURE_SERVICE_CONNECTION variable to enable infra deploy"
+                      echo "az deployment group create -g \$(RESOURCE_GROUP) --template-file infra/main.bicep --parameters @infra/parameters.dev.json"

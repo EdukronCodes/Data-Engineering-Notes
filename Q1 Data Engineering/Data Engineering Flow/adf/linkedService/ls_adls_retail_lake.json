@@ -1,0 +1,22 @@
+{
+  "name": "ls_adls_retail_lake",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "ADLS Gen2 medallion lake (landing, bronze, silver, gold)",
+    "annotations": [],
+    "type": "AzureBlobFS",
+    "typeProperties": {
+      "url": "@{linkedService().storageAccountUrl}"
+    },
+    "parameters": {
+      "storageAccountUrl": {
+        "type": "String",
+        "defaultValue": "https://stretaildatalakedev.dfs.core.windows.net"
+      }
+    },
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    }
+  }
+}

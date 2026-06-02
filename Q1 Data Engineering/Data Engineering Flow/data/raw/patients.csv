@@ -1,0 +1,12 @@
+patient_id,full_name,date_of_birth,gender,insurance_provider,status
+P001,John Doe,1980-01-01,M,BlueCross,Active
+P002,María Santos,1975-06-12,F,Aetna,Active
+P003,James Lee,1990-03-22,M,UnitedHealth,Active
+P004,Aisha Khan,1988-11-05,F,Cigna,Active
+P005,Robert Smith,1965-09-30,M,BlueCross,Inactive
+P006,jane doe,1992-07-18,f,Medicaid,Active
+P007,Invalid Patient,not-a-date,M,Unknown,Active
+P008,Duplicate Test,1985-04-04,M,BlueCross,Active
+P008,Duplicate Test,1985-04-04,M,BlueCross,Active
+P009,,1970-02-02,F,Aetna,Active
+P010,Future Born,2035-01-01,M,BlueCross,Active

@@ -1,0 +1,96 @@
+{
+  "name": "pl_ingest_customers",
+  "properties": {
+    "description": "Ingest retail customer purchase profiles from REST API (blob-hosted JSON) to landing CSV",
+    "activities": [
+      {
+        "name": "Copy REST Customers to Landing",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "RestSource",
+            "httpRequestTimeout": "00:05:00",
+            "requestMethod": "GET"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".csv"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              {
+                "source": { "path": "$['customer_id']" },
+                "sink": { "name": "customer_id" }
+              },
+              {
+                "source": { "path": "$['first_name']" },
+                "sink": { "name": "first_name" }
+              },
+              {
+                "source": { "path": "$['last_name']" },
+                "sink": { "name": "last_name" }
+              },
+              {
+                "source": { "path": "$['email']" },
+                "sink": { "name": "email" }
+              },
+              {
+                "source": { "path": "$['loyalty_tier']" },
+                "sink": { "name": "loyalty_tier" }
+              },
+              {
+                "source": { "path": "$['signup_date']" },
+                "sink": { "name": "signup_date" }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_rest_customers",
+            "type": "DatasetReference",
+            "parameters": {
+              "relativeUrl": "@pipeline().parameters.restCustomersPath"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_landing_retail_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "lakeStorageAccountUrl": "@pipeline().parameters.lakeStorageAccountUrl",
+              "lakeContainer": "@pipeline().parameters.lakeContainer",
+              "landingFolder": "@concat(pipeline().parameters.landingPathPrefix, '/customers')",
+              "landingFileName": "customers.csv"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "environment": { "type": "String", "defaultValue": "dev" },
+      "lakeStorageAccountUrl": { "type": "String" },
+      "lakeContainer": { "type": "String", "defaultValue": "retaildatalake" },
+      "landingPathPrefix": { "type": "String", "defaultValue": "landing" },
+      "restBaseUrl": { "type": "String" },
+      "restCustomersPath": { "type": "String", "defaultValue": "" }
+    },
+    "annotations": ["retail", "ingest", "customers", "rest", "sales"]
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

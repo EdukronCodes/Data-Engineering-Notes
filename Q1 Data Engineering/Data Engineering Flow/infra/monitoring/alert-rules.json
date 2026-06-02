@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logAnalyticsWorkspaceId": { "type": "string" },
+    "actionGroupId": { "type": "string" },
+    "suffix": { "type": "string", "defaultValue": "3546" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "[concat('alert-adf-pipeline-failure-', parameters('suffix'))]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "ADF retail pipeline failures",
+        "description": "Alert when ADF pipeline runs fail",
+        "severity": 2,
+        "enabled": true,
+        "evaluationFrequency": "PT15M",
+        "windowSize": "PT15M",
+        "scopes": [ "[parameters('logAnalyticsWorkspaceId')]" ],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "AzureDiagnostics | where ResourceProvider == 'MICROSOFT.DATAFACTORY' | where Category == 'PipelineRuns' | where status_s == 'Failed' | summarize FailureCount = count() by bin(TimeGenerated, 15m)",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": [ "[parameters('actionGroupId')]" ]
+        }
+      }
+    }
+  ]
+}

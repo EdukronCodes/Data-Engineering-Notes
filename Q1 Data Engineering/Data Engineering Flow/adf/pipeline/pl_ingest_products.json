@@ -1,0 +1,106 @@
+{
+  "name": "pl_ingest_products",
+  "properties": {
+    "description": "Ingest product catalog CSV from ADLS Gen2 sources container to landing",
+    "activities": [
+      {
+        "name": "Copy Products to Landing",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobFSReadSettings",
+              "recursive": true
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".csv"
+            }
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_source_retail_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "sourceStorageAccountUrl": "@pipeline().parameters.sourceStorageAccountUrl",
+              "sourceContainer": "@pipeline().parameters.sourceContainer",
+              "sourceFolder": "products",
+              "sourceFileName": "products.csv"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_landing_retail_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "lakeStorageAccountUrl": "@pipeline().parameters.lakeStorageAccountUrl",
+              "lakeContainer": "@pipeline().parameters.lakeContainer",
+              "landingFolder": "@concat(pipeline().parameters.landingPathPrefix, '/products')",
+              "landingFileName": "products.csv"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "environment": {
+        "type": "String",
+        "defaultValue": "dev"
+      },
+      "sourceStorageAccountUrl": {
+        "type": "String"
+      },
+      "sourceContainer": {
+        "type": "String",
+        "defaultValue": "sources"
+      },
+      "lakeStorageAccountUrl": {
+        "type": "String"
+      },
+      "lakeContainer": {
+        "type": "String",
+        "defaultValue": "retaildatalake"
+      },
+      "landingPathPrefix": {
+        "type": "String",
+        "defaultValue": "landing"
+      }
+    },
+    "annotations": [
+      "retail",
+      "ingest",
+      "products",
+      "blob"
+    ]
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

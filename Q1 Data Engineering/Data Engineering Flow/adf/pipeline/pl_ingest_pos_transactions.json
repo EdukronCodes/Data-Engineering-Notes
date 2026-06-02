@@ -1,0 +1,78 @@
+{
+  "name": "pl_ingest_pos_transactions",
+  "properties": {
+    "description": "Ingest POS line items from Azure SQL to landing CSV",
+    "activities": [
+      {
+        "name": "Copy POS SQL to Landing",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "SELECT transaction_id, transaction_date, transaction_time, store_id, customer_id, product_id, quantity, unit_price, discount_pct, line_total, payment_method FROM dbo.pos_transactions"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".csv"
+            }
+          },
+          "enableStaging": false
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_azure_sql_pos",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_landing_retail_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "lakeStorageAccountUrl": "@pipeline().parameters.lakeStorageAccountUrl",
+              "lakeContainer": "@pipeline().parameters.lakeContainer",
+              "landingFolder": "@concat(pipeline().parameters.landingPathPrefix, '/pos_transactions')",
+              "landingFileName": "pos_transactions.csv"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "environment": {
+        "type": "String",
+        "defaultValue": "dev"
+      },
+      "lakeStorageAccountUrl": {
+        "type": "String"
+      },
+      "lakeContainer": {
+        "type": "String",
+        "defaultValue": "retaildatalake"
+      },
+      "landingPathPrefix": {
+        "type": "String",
+        "defaultValue": "landing"
+      }
+    },
+    "annotations": [
+      "retail",
+      "ingest",
+      "pos",
+      "sql"
+    ]
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

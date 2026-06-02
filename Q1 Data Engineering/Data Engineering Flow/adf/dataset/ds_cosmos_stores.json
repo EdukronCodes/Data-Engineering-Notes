@@ -1,0 +1,16 @@
+{
+  "name": "ds_cosmos_stores",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_cosmos_stores",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {},
+    "annotations": [],
+    "type": "CosmosDbSqlApiCollection",
+    "typeProperties": {
+      "collectionName": "stores"
+    },
+    "schema": []
+  }
+}

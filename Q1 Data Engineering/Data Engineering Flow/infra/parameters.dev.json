@@ -1,0 +1,45 @@
+﻿{
+    "subscriptionId":  "c4682434-f940-4f2f-a64f-c69a6054bb10",
+    "environment":  "dev",
+    "location":  "westus2",
+    "resourceGroup":  "rg-retailde-dev",
+    "namingPrefix":  "retailde",
+    "useRandomSuffix":  true,
+    "tags":  {
+                 "project":  "retail-data-pipeline",
+                 "environment":  "dev"
+             },
+    "storageLakeAccount":  "stretaildelake",
+    "storageSourcesAccount":  "stretaildesrc",
+    "lakeContainer":  "retaildatalake",
+    "sourcesContainer":  "sources",
+    "lakeFolders":  [
+                        "landing",
+                        "bronze",
+                        "silver",
+                        "gold"
+                    ],
+    "dataFactoryName":  "adf-retailde-dev",
+    "keyVaultName":  "kv-retailde-dev",
+    "databricksWorkspaceName":  "dbw-retailde-dev",
+    "sqlServerName":  "sql-retailde-dev",
+    "sqlDatabaseName":  "sqldb-pos",
+    "sqlAdminUser":  "sqladmin",
+    "postgresServerName":  "psql-retailde-dev",
+    "postgresDatabaseName":  "inventory",
+    "postgresAdminUser":  "pgadmin",
+    "cosmosAccountName":  "cosmos-retailde-dev",
+    "cosmosDatabaseName":  "retailmetadata",
+    "cosmosContainerStores":  "stores",
+    "restApiUrl":  "https://stretaildesrc3546.blob.core.windows.net/sources/customers/customers.json",
+    "deployLogicAppMock":  false,
+    "sku":  {
+                "storage":  "Standard_LRS",
+                "sql":  "Basic",
+                "postgresSku":  "Standard_B1ms",
+                "cosmosThroughput":  400
+            },
+    "dataServicesLocation":  "centralindia",
+    "suffix":  3546,
+    "dataServicesSuffix":  "ci3546"
+}

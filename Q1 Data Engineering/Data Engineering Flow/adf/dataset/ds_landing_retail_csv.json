@@ -1,0 +1,35 @@
+{
+  "name": "ds_landing_retail_csv",
+  "properties": {
+    "description": "Parameterized CSV landing zone in ADLS Gen2",
+    "linkedServiceName": {
+      "referenceName": "ls_adls_retail_lake",
+      "type": "LinkedServiceReference",
+      "parameters": {
+        "storageAccountUrl": "@dataset().lakeStorageAccountUrl"
+      }
+    },
+    "parameters": {
+      "lakeStorageAccountUrl": { "type": "String" },
+      "lakeContainer": { "type": "String" },
+      "landingFolder": { "type": "String" },
+      "landingFileName": { "type": "String" }
+    },
+    "annotations": [],
+    "type": "DelimitedText",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobFSLocation",
+        "fileName": "@{dataset().landingFileName}",
+        "folderPath": "@{concat(dataset().landingFolder, '/year=', formatDateTime(utcnow(), 'yyyy'), '/month=', formatDateTime(utcnow(), 'MM'), '/day=', formatDateTime(utcnow(), 'dd'))}",
+        "fileSystem": "@{dataset().lakeContainer}"
+      },
+      "columnDelimiter": ",",
+      "escapeChar": "\\",
+      "firstRowAsHeader": true,
+      "quoteChar": "\""
+    },
+    "schema": []
+  },
+  "type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,172 @@
+{
+  "name": "pl_medallion_bronze",
+  "properties": {
+    "description": "Bronze layer: ingest all 5 retail sources from landing to bronze Delta tables",
+    "activities": [
+      {
+        "name": "Bronze POS",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "/Repos/retail-data-engineering/databricks/notebooks/bronze/bronze_pos_transactions",
+          "baseParameters": {
+            "environment": "@pipeline().parameters.environment",
+            "storage_account": "@pipeline().parameters.storageAccountName",
+            "container": "@pipeline().parameters.lakeContainer"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_retail",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "workspaceUrl": "@pipeline().parameters.databricksWorkspaceUrl",
+            "clusterId": "@pipeline().parameters.databricksClusterId"
+          }
+        }
+      },
+      {
+        "name": "Bronze Inventory",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "/Repos/retail-data-engineering/databricks/notebooks/bronze/bronze_inventory",
+          "baseParameters": {
+            "environment": "@pipeline().parameters.environment",
+            "storage_account": "@pipeline().parameters.storageAccountName",
+            "container": "@pipeline().parameters.lakeContainer"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_retail",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "workspaceUrl": "@pipeline().parameters.databricksWorkspaceUrl",
+            "clusterId": "@pipeline().parameters.databricksClusterId"
+          }
+        }
+      },
+      {
+        "name": "Bronze Customers",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "/Repos/retail-data-engineering/databricks/notebooks/bronze/bronze_customers",
+          "baseParameters": {
+            "environment": "@pipeline().parameters.environment",
+            "storage_account": "@pipeline().parameters.storageAccountName",
+            "container": "@pipeline().parameters.lakeContainer"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_retail",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "workspaceUrl": "@pipeline().parameters.databricksWorkspaceUrl",
+            "clusterId": "@pipeline().parameters.databricksClusterId"
+          }
+        }
+      },
+      {
+        "name": "Bronze Products",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "/Repos/retail-data-engineering/databricks/notebooks/bronze/bronze_products",
+          "baseParameters": {
+            "environment": "@pipeline().parameters.environment",
+            "storage_account": "@pipeline().parameters.storageAccountName",
+            "container": "@pipeline().parameters.lakeContainer"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_retail",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "workspaceUrl": "@pipeline().parameters.databricksWorkspaceUrl",
+            "clusterId": "@pipeline().parameters.databricksClusterId"
+          }
+        }
+      },
+      {
+        "name": "Bronze Stores",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "/Repos/retail-data-engineering/databricks/notebooks/bronze/bronze_stores",
+          "baseParameters": {
+            "environment": "@pipeline().parameters.environment",
+            "storage_account": "@pipeline().parameters.storageAccountName",
+            "container": "@pipeline().parameters.lakeContainer"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_retail",
+          "type": "LinkedServiceReference",
+          "parameters": {
+            "workspaceUrl": "@pipeline().parameters.databricksWorkspaceUrl",
+            "clusterId": "@pipeline().parameters.databricksClusterId"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "environment": {
+        "type": "String",
+        "defaultValue": "dev"
+      },
+      "storageAccountName": {
+        "type": "String"
+      },
+      "lakeContainer": {
+        "type": "String",
+        "defaultValue": "retaildatalake"
+      },
+      "databricksWorkspaceUrl": {
+        "type": "String",
+        "defaultValue": "https://adb-7405606963187307.7.azuredatabricks.net"
+      },
+      "databricksWorkspaceResourceId": {
+        "type": "String"
+      },
+      "databricksClusterId": {
+        "type": "String"
+      }
+    },
+    "annotations": [
+      "retail",
+      "medallion",
+      "bronze"
+    ]
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

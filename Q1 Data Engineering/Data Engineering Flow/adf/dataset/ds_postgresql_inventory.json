@@ -1,0 +1,17 @@
+{
+  "name": "ds_postgresql_inventory",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_postgresql_inventory",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {},
+    "annotations": [],
+    "type": "PostgreSqlV2Table",
+    "typeProperties": {
+      "schema": "public",
+      "table": "inventory_snapshot"
+    },
+    "schema": []
+  }
+}

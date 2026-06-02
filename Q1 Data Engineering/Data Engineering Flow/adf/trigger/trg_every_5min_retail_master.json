@@ -1,0 +1,45 @@
+﻿{
+  "name": "trg_every_5min_retail_master",
+  "properties": {
+    "description": "Runs master retail pipeline every 5 minutes (UTC)",
+    "annotations": [],
+    "runtimeState": "Stopped",
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "pl_master_retail_pipeline",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "environment": "@trigger().parameters.environment",
+          "storageAccountName": "@trigger().parameters.storageAccountName",
+          "sourceStorageAccountUrl": "@trigger().parameters.sourceStorageAccountUrl",
+          "sourceContainer": "sources",
+          "lakeStorageAccountUrl": "@trigger().parameters.lakeStorageAccountUrl",
+          "lakeContainer": "retaildatalake",
+          "landingPathPrefix": "landing",
+          "databricksWorkspaceUrl": "@trigger().parameters.databricksWorkspaceUrl",
+          "databricksClusterId": "@trigger().parameters.databricksClusterId"
+        }
+      }
+    ],
+    "type": "ScheduleTrigger",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Minute",
+        "interval": 5,
+        "startTime": "2025-06-01T00:00:00Z",
+        "timeZone": "UTC"
+      }
+    },
+    "parameters": {
+      "environment": { "type": "String", "defaultValue": "dev" },
+      "storageAccountName": { "type": "String", "defaultValue": "stretaildelake3546" },
+      "sourceStorageAccountUrl": { "type": "String", "defaultValue": "https://stretaildesrc3546.dfs.core.windows.net" },
+      "lakeStorageAccountUrl": { "type": "String", "defaultValue": "https://stretaildelake3546.dfs.core.windows.net" },
+      "databricksWorkspaceUrl": { "type": "String", "defaultValue": "https://adb-7405606963187307.7.azuredatabricks.net" },
+      "databricksClusterId": { "type": "String", "defaultValue": "0602-032411-xeepuoij" }
+    }
+  },
+  "type": "Microsoft.DataFactory/factories/triggers"
+}

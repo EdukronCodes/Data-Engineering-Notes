@@ -1,0 +1,24 @@
+{
+  "name": "ls_rest_customers",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "Retail customer purchase profiles from blob-hosted REST JSON (sales cohort C0001-C0008)",
+    "annotations": [],
+    "type": "HttpServer",
+    "typeProperties": {
+      "url": "@{linkedService().baseUrl}",
+      "enableServerCertificateValidation": true,
+      "authenticationType": "Anonymous"
+    },
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    },
+    "parameters": {
+      "baseUrl": {
+        "type": "String",
+        "defaultValue": "https://stretaildesrc3546.blob.core.windows.net/sources"
+      }
+    }
+  }
+}

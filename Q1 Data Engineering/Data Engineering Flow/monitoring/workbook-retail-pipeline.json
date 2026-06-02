@@ -1,0 +1,141 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Retail Data Pipeline — Operations Dashboard\n\nMonitors ADF pipeline runs, ingestion volumes by source, sales KPIs (gold layer), and resource health."
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 }
+              ]
+            }
+          }
+        ],
+        "style": "above",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == \"MICROSOFT.DATAFACTORY\"\n| where Category == \"PipelineRuns\"\n| where TimeGenerated {TimeRange}\n| summarize Total = count(), Succeeded = countif(status_s == \"Succeeded\"), Failed = countif(status_s == \"Failed\"), Cancelled = countif(status_s == \"Cancelled\")\n| extend SuccessRate = round(100.0 * Succeeded / Total, 1)",
+        "size": 4,
+        "title": "Pipeline run summary (24h)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": { "columnMatch": "Total", "formatter": 1 },
+          "leftContent": { "columnMatch": "SuccessRate", "formatter": 12, "formatOptions": { "palette": "greenRed" }, "numberFormat": { "unit": 1, "options": { "style": "decimal", "maximumFractionDigits": 1 } } }
+        }
+      },
+      "name": "pipeline-summary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == \"MICROSOFT.DATAFACTORY\"\n| where Category == \"PipelineRuns\"\n| where TimeGenerated {TimeRange}\n| summarize Runs = count() by bin(TimeGenerated, 1h), status_s\n| render timechart",
+        "size": 0,
+        "title": "Pipeline runs over time (success vs failure)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "pipeline-timechart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == \"MICROSOFT.DATAFACTORY\"\n| where Category == \"ActivityRuns\"\n| where TimeGenerated {TimeRange}\n| where activityName_s has_any (\"Copy\", \"Ingest\")\n| summarize CopyDurationSec = avg(todouble(duration_s)) by pipelineName_s, activityName_s\n| order by CopyDurationSec desc\n| take 20",
+        "size": 0,
+        "title": "Ingestion activity duration by pipeline",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "ingestion-duration"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let sources = dynamic([\"pos_transactions\", \"products\", \"customers\", \"inventory\", \"stores\"]);\nAzureDiagnostics\n| where ResourceProvider == \"MICROSOFT.DATAFACTORY\"\n| where Category == \"ActivityRuns\"\n| where TimeGenerated {TimeRange}\n| where activityName_s has \"Copy\"\n| extend source = case(\n    pipelineName_s has \"pos\", \"POS (SQL)\",\n    pipelineName_s has \"product\", \"Products (Blob)\",\n    pipelineName_s has \"customer\", \"Customers (REST)\",\n    pipelineName_s has \"inventory\", \"Inventory (Postgres)\",\n    pipelineName_s has \"store\", \"Stores (Cosmos)\",\n    \"Other\")\n| summarize RowsCopied = sum(todouble(rowsCopied_d)), Runs = count() by source\n| order by RowsCopied desc",
+        "size": 0,
+        "title": "Ingestion volumes by retail source",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "ingestion-volumes"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Sales KPIs — sample query when gold Delta not in Log Analytics\n// Replace with custom log table or Databricks SQL export when available\nprint Source = \"Gold layer (sample)\", TotalTransactions = 352, NetSalesUSD = 52341.87, AvgBasketUSD = 148.70, TopStore = \"S003\", TopProduct = \"P1004\"\n| project Source, TotalTransactions, NetSalesUSD, AvgBasketUSD, TopStore, TopProduct",
+        "size": 0,
+        "title": "Sales KPIs — gold fact_sales (sample / post-pipeline)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "sales-kpis"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureMetrics\n| where ResourceProvider == \"MICROSOFT.STORAGE\"\n| where TimeGenerated {TimeRange}\n| where MetricName in (\"Transactions\", \"Ingress\", \"Egress\", \"SuccessE2ELatency\")\n| summarize avg(Average) by bin(TimeGenerated, 15m), MetricName\n| render timechart",
+        "size": 0,
+        "title": "Storage account health (lake + sources)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "storage-health"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where ResourceProvider == \"MICROSOFT.DATAFACTORY\"\n| where Category == \"PipelineRuns\"\n| where status_s == \"Failed\"\n| where TimeGenerated {TimeRange}\n| project TimeGenerated, pipelineName_s, runId_g, failureType_s, message\n| order by TimeGenerated desc\n| take 50",
+        "size": 0,
+        "title": "Recent pipeline failures",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "failures-table"
+    }
+  ],
+  "isLocked": false,
+  "fallbackResourceIds": []
+}

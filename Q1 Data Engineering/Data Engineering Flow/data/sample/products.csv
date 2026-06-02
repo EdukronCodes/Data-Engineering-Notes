@@ -1,0 +1,9 @@
+product_id,product_name,category,subcategory,unit_price,is_active
+P1001,Organic Cotton T-Shirt,Apparel,Basics,24.99,Y
+P1002,Denim Jeans Slim Fit,Apparel,Denim,59.99,Y
+P1003,Running Sneakers Pro,Footwear,Athletic,89.99,Y
+P1004,Leather Crossbody Bag,Accessories,Bags,79.99,Y
+P1005,Wireless Earbuds,Electronics,Audio,129.99,Y
+P1006,Stainless Water Bottle,Home,Kitchen,19.99,Y
+P1007,Yoga Mat Premium,Sports,Fitness,34.99,Y
+P1008,Winter Puffer Jacket,Apparel,Outerwear,149.99,Y

@@ -1,0 +1,61 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "factoryName": {
+      "type": "string",
+      "metadata": { "description": "Data Factory name" }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
+  "variables": {
+    "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+  },
+  "resources": [
+    {
+      "name": "[concat(parameters('factoryName'), '/ls_adls_retail_lake')]",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "type": "AzureBlobFS",
+        "typeProperties": {
+          "url": "https://stretaildatalakedev.dfs.core.windows.net"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "name": "[concat(parameters('factoryName'), '/ls_adls_retail_sources')]",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "type": "AzureBlobFS",
+        "typeProperties": {
+          "url": "https://stretailsourcesdev.dfs.core.windows.net"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('factoryName'), '/ls_databricks_retail')]",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "type": "AzureDatabricks",
+        "typeProperties": {
+          "domain": "https://adb-0000000000000000.0.azuredatabricks.net",
+          "existingClusterId": "0000-000000-xxxxxxxx",
+          "encryptedCredential": "****"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "factoryName": {
+      "type": "string",
+      "value": "[parameters('factoryName')]"
+    }
+  }
+}

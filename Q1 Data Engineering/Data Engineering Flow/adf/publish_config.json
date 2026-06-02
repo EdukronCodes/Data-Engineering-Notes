@@ -1,0 +1,5 @@
+{
+  "publishBranch": "adf_publish",
+  "includeGlobalParamsTemplate": true,
+  "includeFactoryTemplate": true
+}

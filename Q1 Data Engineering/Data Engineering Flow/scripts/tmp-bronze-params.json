@@ -1,0 +1,7 @@
+{
+  "environment": "dev",
+  "storageAccountName": "stretaildelake3546",
+  "lakeContainer": "retaildatalake",
+  "databricksClusterId": "0602-032411-xeepuoij",
+  "databricksWorkspaceUrl": "https://adb-7405606963187307.7.azuredatabricks.net"
+}

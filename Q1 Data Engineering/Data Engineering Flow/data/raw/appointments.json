@@ -1,0 +1,13 @@
+{
+  "source": "clinic_scheduling_system",
+  "exported_at": "2026-06-01T08:00:00Z",
+  "appointments": [
+    {"appointment_id": "A001", "patient_id": "P001", "scheduled_at": "2026-06-02T09:00:00", "provider": "Dr. Patel", "department": "Primary Care", "status": "Confirmed", "duration_minutes": 30},
+    {"appointment_id": "A002", "patient_id": "P002", "scheduled_at": "2026-06-02T09:30:00", "provider": "Dr. Chen", "department": "Cardiology", "status": "Check-in", "duration_minutes": 45},
+    {"appointment_id": "A003", "patient_id": "P003", "scheduled_at": "2026-06-02T10:15:00", "provider": "Dr. Patel", "department": "Primary Care", "status": "Pending", "duration_minutes": 30},
+    {"appointment_id": "A004", "patient_id": "P004", "scheduled_at": "2026-06-02T11:00:00", "provider": "Dr. Nguyen", "department": "Endocrinology", "status": "Confirmed", "duration_minutes": 60},
+    {"appointment_id": "A005", "patient_id": "P099", "scheduled_at": "2026-06-03T14:00:00", "provider": "Dr. Chen", "department": "Cardiology", "status": "Confirmed", "duration_minutes": 30},
+    {"appointment_id": "A006", "patient_id": "P001", "scheduled_at": "bad-date", "provider": "Dr. Patel", "department": "Primary Care", "status": "Cancelled", "duration_minutes": 30},
+    {"appointment_id": "A007", "patient_id": "P005", "scheduled_at": "2026-06-04T08:30:00", "provider": "Dr. Nguyen", "department": "Primary Care", "status": "No-show", "duration_minutes": 30}
+  ]
+}

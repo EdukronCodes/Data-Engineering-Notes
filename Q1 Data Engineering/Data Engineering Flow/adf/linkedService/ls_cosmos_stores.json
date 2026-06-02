@@ -1,0 +1,37 @@
+﻿{
+    "name":  "ls_cosmos_stores",
+    "type":  "Microsoft.DataFactory/factories/linkedservices",
+    "properties":  {
+                       "description":  "Store metadata in Cosmos DB",
+                       "annotations":  [
+
+                                       ],
+                       "type":  "CosmosDb",
+                       "typeProperties":  {
+                                              "accountEndpoint":  "@{linkedService().accountEndpoint}",
+                                              "database":  "@{linkedService().databaseName}",
+                                              "accountKey":  {
+                                                                 "type":  "AzureKeyVaultSecret",
+                                                                 "store":  {
+                                                                               "referenceName":  "ls_key_vault_retail",
+                                                                               "type":  "LinkedServiceReference"
+                                                                           },
+                                                                 "secretName":  "cosmos-primary-key"
+                                                             }
+                                          },
+                       "connectVia":  {
+                                          "referenceName":  "AutoResolveIntegrationRuntime",
+                                          "type":  "IntegrationRuntimeReference"
+                                      },
+                       "parameters":  {
+                                          "accountEndpoint":  {
+                                                                  "type":  "String",
+                                                                  "defaultValue":  "https://cosmos-retailde-dev.documents.azure.com:443/"
+                                                              },
+                                          "databaseName":  {
+                                                               "type":  "String",
+                                                               "defaultValue":  "retailmetadata"
+                                                           }
+                                      }
+                   }
+}

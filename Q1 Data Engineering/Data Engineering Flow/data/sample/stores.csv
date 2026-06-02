@@ -1,0 +1,6 @@
+store_id,store_name,city,state,postal_code,region,opened_date,annual_sales_usd
+S001,Downtown Flagship,Seattle,WA,98101,West,2018-01-01,4200000
+S002,Mall of Bellevue,Bellevue,WA,98004,West,2018-01-01,3800000
+S003,Portland Pioneer,Portland,OR,97201,West,2018-01-01,5100000
+S004,Denver Union,Denver,CO,80202,Mountain,2018-01-01,2900000
+S005,Chicago Loop,Chicago,IL,60601,Midwest,2018-01-01,6100000

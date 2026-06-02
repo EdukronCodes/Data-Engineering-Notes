@@ -1,0 +1,20 @@
+{
+  "name": "ls_databricks_retail",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "Databricks workspace for medallion bronze/silver/gold processing",
+    "annotations": [],
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": "@{linkedService().workspaceUrl}",
+      "authentication": "MSI",
+      "workspaceResourceId": "@{linkedService().workspaceResourceId}",
+      "existingClusterId": "@{linkedService().clusterId}"
+    },
+    "parameters": {
+      "workspaceUrl": { "type": "String", "defaultValue": "https://adb-7405606963187307.7.azuredatabricks.net" },
+      "workspaceResourceId": { "type": "String", "defaultValue": "/subscriptions/c4682434-f940-4f2f-a64f-c69a6054bb10/resourceGroups/rg-retailde-dev/providers/Microsoft.Databricks/workspaces/dbw-retailde-ci3546" },
+      "clusterId": { "type": "String", "defaultValue": "0602-032411-xeepuoij" }
+    }
+  }
+}

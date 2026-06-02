@@ -1,0 +1,9 @@
+customer_id,first_name,last_name,email,loyalty_tier,signup_date
+C0001,Alice,Johnson,alice.j@email.com,Gold,2022-03-15
+C0002,Bob,Smith,bob.s@email.com,Silver,2023-01-20
+C0003,Carol,Williams,carol.w@email.com,Bronze,2024-06-01
+C0004,David,Brown,david.b@email.com,Gold,2021-11-08
+C0005,Eva,Martinez,eva.m@email.com,Silver,2023-09-12
+C0006,Frank,Lee,frank.l@email.com,Bronze,2024-02-28
+C0007,Grace,Taylor,grace.t@email.com,Platinum,2020-05-30
+C0008,Henry,Anderson,henry.a@email.com,Silver,2023-04-17

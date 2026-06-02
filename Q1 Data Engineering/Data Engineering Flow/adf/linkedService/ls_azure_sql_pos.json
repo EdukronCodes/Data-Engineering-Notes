@@ -1,0 +1,41 @@
+{
+  "name": "ls_azure_sql_pos",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "POS transactional data in Azure SQL",
+    "annotations": [],
+    "type": "AzureSqlDatabase",
+    "typeProperties": {
+      "connectionString": {
+        "type": "SecureString",
+        "value": "Server=tcp:@{linkedService().serverName}.database.windows.net,1433;Database=@{linkedService().databaseName};User ID=@{linkedService().userName};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+      },
+      "password": {
+        "type": "AzureKeyVaultSecret",
+        "store": {
+          "referenceName": "ls_key_vault_retail",
+          "type": "LinkedServiceReference"
+        },
+        "secretName": "sql-admin-password"
+      }
+    },
+    "connectVia": {
+      "referenceName": "AutoResolveIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
+    },
+    "parameters": {
+      "serverName": {
+        "type": "String",
+        "defaultValue": "sql-retailde-dev"
+      },
+      "databaseName": {
+        "type": "String",
+        "defaultValue": "sqldb-pos"
+      },
+      "userName": {
+        "type": "String",
+        "defaultValue": "sqladmin"
+      }
+    }
+  }
+}

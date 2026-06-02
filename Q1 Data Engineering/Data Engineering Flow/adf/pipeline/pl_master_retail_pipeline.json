@@ -1,0 +1,318 @@
+﻿{
+    "name":  "pl_master_retail_pipeline",
+    "properties":  {
+                       "description":  "Master orchestrator: parallel ingest of 5 retail sources, then bronze → silver → gold medallion",
+                       "activities":  [
+                                          {
+                                              "name":  "Ingest All Sources",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_ingest_pos_transactions",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "lakeStorageAccountUrl":  "@pipeline().parameters.lakeStorageAccountUrl",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "landingPathPrefix":  "@pipeline().parameters.landingPathPrefix"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Ingest Inventory",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_ingest_inventory",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "lakeStorageAccountUrl":  "@pipeline().parameters.lakeStorageAccountUrl",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "landingPathPrefix":  "@pipeline().parameters.landingPathPrefix"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Ingest Customers",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_ingest_customers",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "lakeStorageAccountUrl":  "@pipeline().parameters.lakeStorageAccountUrl",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "landingPathPrefix":  "@pipeline().parameters.landingPathPrefix",
+                                                                                        "restBaseUrl":  "@pipeline().parameters.restCustomersBaseUrl",
+                                                                                        "restCustomersPath":  "@pipeline().parameters.restCustomersPath"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Ingest Products",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_ingest_products",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "lakeStorageAccountUrl":  "@pipeline().parameters.lakeStorageAccountUrl",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "landingPathPrefix":  "@pipeline().parameters.landingPathPrefix",
+                                                                                        "sourceStorageAccountUrl":  "@pipeline().parameters.sourceStorageAccountUrl",
+                                                                                        "sourceContainer":  "@pipeline().parameters.sourceContainer"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Ingest Stores",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_ingest_stores",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "lakeStorageAccountUrl":  "@pipeline().parameters.lakeStorageAccountUrl",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "landingPathPrefix":  "@pipeline().parameters.landingPathPrefix"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Run Bronze",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+                                                                {
+                                                                    "activity":  "Ingest All Sources",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                },
+                                                                {
+                                                                    "activity":  "Ingest Inventory",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                },
+                                                                {
+                                                                    "activity":  "Ingest Customers",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                },
+                                                                {
+                                                                    "activity":  "Ingest Products",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                },
+                                                                {
+                                                                    "activity":  "Ingest Stores",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                }
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_medallion_bronze",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "storageAccountName":  "@pipeline().parameters.storageAccountName",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "databricksClusterId":  "@pipeline().parameters.databricksClusterId"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Run Silver",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+                                                                {
+                                                                    "activity":  "Run Bronze",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                }
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_medallion_silver",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "storageAccountName":  "@pipeline().parameters.storageAccountName",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "databricksClusterId":  "@pipeline().parameters.databricksClusterId"
+                                                                                    }
+                                                                 }
+                                          },
+                                          {
+                                              "name":  "Run Gold",
+                                              "type":  "ExecutePipeline",
+                                              "dependsOn":  [
+                                                                {
+                                                                    "activity":  "Run Silver",
+                                                                    "dependencyConditions":  [
+                                                                                                 "Succeeded"
+                                                                                             ]
+                                                                }
+                                                            ],
+                                              "policy":  {
+                                                             "secureInput":  false
+                                                         },
+                                              "userProperties":  [
+
+                                                                 ],
+                                              "typeProperties":  {
+                                                                     "pipeline":  {
+                                                                                      "referenceName":  "pl_medallion_gold",
+                                                                                      "type":  "PipelineReference"
+                                                                                  },
+                                                                     "waitOnCompletion":  true,
+                                                                     "parameters":  {
+                                                                                        "environment":  "@pipeline().parameters.environment",
+                                                                                        "storageAccountName":  "@pipeline().parameters.storageAccountName",
+                                                                                        "lakeContainer":  "@pipeline().parameters.lakeContainer",
+                                                                                        "databricksClusterId":  "@pipeline().parameters.databricksClusterId"
+                                                                                    }
+                                                                 }
+                                          }
+                                      ],
+                       "parameters":  {
+                                          "environment":  {
+                                                              "type":  "String",
+                                                              "defaultValue":  "dev"
+                                                          },
+                                          "storageAccountName":  {
+                                                                     "type":  "String",
+                                                                     "defaultValue":  "stretaildelake3546"
+                                                                 },
+                                          "sourceStorageAccountName":  {
+                                                                           "type":  "String",
+                                                                           "defaultValue":  "stretaildesrc3546"
+                                                                       },
+                                          "sourceStorageAccountUrl":  {
+                                                                          "type":  "String",
+                                                                          "defaultValue":  "https://stretaildesrc3546.dfs.core.windows.net"
+                                                                      },
+                                          "sourceContainer":  {
+                                                                  "type":  "String",
+                                                                  "defaultValue":  "sources"
+                                                              },
+                                          "lakeStorageAccountUrl":  {
+                                                                        "type":  "String",
+                                                                        "defaultValue":  "https://stretaildelake3546.dfs.core.windows.net"
+                                                                    },
+                                          "lakeContainer":  {
+                                                                "type":  "String",
+                                                                "defaultValue":  "retaildatalake"
+                                                            },
+                                          "landingPathPrefix":  {
+                                                                    "type":  "String",
+                                                                    "defaultValue":  "landing"
+                                                                },
+                                          "databricksWorkspaceUrl":  {
+                                                                         "type":  "String",
+                                                                         "defaultValue":  "adb-7405606963187307.7.azuredatabricks.net"
+                                                                     },
+                                          "databricksClusterId":  {
+                                                                      "type":  "String",
+                                                                      "defaultValue":  "0602-032411-xeepuoij"
+                                                                  },
+                                          "databricksWorkspaceResourceId":  {
+                                                                                "type":  "String",
+                                                                                "defaultValue":  "/subscriptions/c4682434-f940-4f2f-a64f-c69a6054bb10/resourceGroups/rg-retailde-dev/providers/Microsoft.Databricks/workspaces/dbw-retailde-ci3546"
+                                                                            },
+                                          "restCustomersBaseUrl":  {
+                                                                       "type":  "String",
+                                                                       "defaultValue":  "https://stretaildesrc3546.blob.core.windows.net/sources"
+                                                                   },
+                                          "restCustomersPath":  {
+                                                                    "type":  "String",
+                                                                    "defaultValue":  "/customers/customers.json"
+                                                                }
+                                      },
+                       "annotations":  [
+                                           "retail",
+                                           "master"
+                                       ]
+                   },
+    "type":  "Microsoft.DataFactory/factories/pipelines"
+}

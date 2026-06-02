@@ -1,0 +1,77 @@
+{
+  "name": "pl_ingest_inventory",
+  "properties": {
+    "description": "Ingest inventory from Azure PostgreSQL to landing CSV",
+    "activities": [
+      {
+        "name": "Copy Inventory PG to Landing",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "PostgreSqlV2Source",
+            "query": "SELECT store_id, product_id, quantity_on_hand, reorder_point, snapshot_date::text AS snapshot_date FROM inventory_snapshot"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".csv"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_postgresql_inventory",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_landing_retail_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "lakeStorageAccountUrl": "@pipeline().parameters.lakeStorageAccountUrl",
+              "lakeContainer": "@pipeline().parameters.lakeContainer",
+              "landingFolder": "@concat(pipeline().parameters.landingPathPrefix, '/inventory')",
+              "landingFileName": "inventory.csv"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "environment": {
+        "type": "String",
+        "defaultValue": "dev"
+      },
+      "lakeStorageAccountUrl": {
+        "type": "String"
+      },
+      "lakeContainer": {
+        "type": "String",
+        "defaultValue": "retaildatalake"
+      },
+      "landingPathPrefix": {
+        "type": "String",
+        "defaultValue": "landing"
+      }
+    },
+    "annotations": [
+      "retail",
+      "ingest",
+      "inventory",
+      "postgresql"
+    ]
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,47 @@
+{
+  "name": "adf-retail-de",
+  "location": "eastus",
+  "identity": {
+    "type": "SystemAssigned"
+  },
+  "properties": {
+    "globalParameters": {
+      "environment": {
+        "type": "String",
+        "value": "dev"
+      },
+      "storageAccountName": {
+        "type": "String",
+        "value": "stretaildatalakedev"
+      },
+      "storageContainerName": {
+        "type": "String",
+        "value": "retaildatalake"
+      },
+      "sourceStorageAccountName": {
+        "type": "String",
+        "value": "stretailsourcesdev"
+      },
+      "sourceContainerName": {
+        "type": "String",
+        "value": "sources"
+      },
+      "databricksWorkspaceUrl": {
+        "type": "String",
+        "value": "https://adb-0000000000000000.0.azuredatabricks.net"
+      },
+      "databricksClusterId": {
+        "type": "String",
+        "value": "0000-000000-xxxxxxxx"
+      },
+      "keyVaultName": {
+        "type": "String",
+        "value": "kv-retail-de-dev"
+      },
+      "landingPathPrefix": {
+        "type": "String",
+        "value": "landing"
+      }
+    }
+  }
+}

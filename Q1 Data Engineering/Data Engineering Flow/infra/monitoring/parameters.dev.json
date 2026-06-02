@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "eastus" },
+    "suffix": { "value": "3546" },
+    "dataFactoryName": { "value": "adf-retailde-dev3546" },
+    "storageLakeAccount": { "value": "stretaildelake3546" },
+    "storageSourcesAccount": { "value": "stretaildesrc3546" },
+    "sqlServerName": { "value": "sql-retailde-ci3546" },
+    "sqlDatabaseName": { "value": "sqldb-pos" },
+    "postgresServerName": { "value": "psql-retailde-ci3546" },
+    "cosmosAccountName": { "value": "cosmos-retailde-ci3546" },
+    "databricksWorkspaceName": { "value": "dbw-retailde-ci3546" },
+    "keyVaultName": { "value": "kvretailde3546" }
+  }
+}

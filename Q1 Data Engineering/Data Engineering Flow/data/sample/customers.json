@@ -1,0 +1,66 @@
+[
+  {
+    "customer_id": "C0001",
+    "first_name": "Alice",
+    "last_name": "Johnson",
+    "email": "alice.j@email.com",
+    "loyalty_tier": "Gold",
+    "signup_date": "2022-03-15"
+  },
+  {
+    "customer_id": "C0002",
+    "first_name": "Bob",
+    "last_name": "Smith",
+    "email": "bob.s@email.com",
+    "loyalty_tier": "Silver",
+    "signup_date": "2023-01-20"
+  },
+  {
+    "customer_id": "C0003",
+    "first_name": "Carol",
+    "last_name": "Williams",
+    "email": "carol.w@email.com",
+    "loyalty_tier": "Bronze",
+    "signup_date": "2024-06-01"
+  },
+  {
+    "customer_id": "C0004",
+    "first_name": "David",
+    "last_name": "Brown",
+    "email": "david.b@email.com",
+    "loyalty_tier": "Gold",
+    "signup_date": "2021-11-08"
+  },
+  {
+    "customer_id": "C0005",
+    "first_name": "Eva",
+    "last_name": "Martinez",
+    "email": "eva.m@email.com",
+    "loyalty_tier": "Silver",
+    "signup_date": "2023-09-12"
+  },
+  {
+    "customer_id": "C0006",
+    "first_name": "Frank",
+    "last_name": "Lee",
+    "email": "frank.l@email.com",
+    "loyalty_tier": "Bronze",
+    "signup_date": "2024-02-28"
+  },
+  {
+    "customer_id": "C0007",
+    "first_name": "Grace",
+    "last_name": "Taylor",
+    "email": "grace.t@email.com",
+    "loyalty_tier": "Platinum",
+    "signup_date": "2020-05-30"
+  },
+  {
+    "customer_id": "C0008",
+    "first_name": "Henry",
+    "last_name": "Anderson",
+    "email": "henry.a@email.com",
+    "loyalty_tier": "Silver",
+    "signup_date": "2023-04-17"
+  }
+]

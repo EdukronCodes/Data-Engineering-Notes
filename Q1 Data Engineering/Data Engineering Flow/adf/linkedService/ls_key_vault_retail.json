@@ -1,0 +1,18 @@
+{
+  "name": "ls_key_vault_retail",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "Azure Key Vault for secrets (storage keys, Databricks tokens)",
+    "annotations": [],
+    "type": "AzureKeyVault",
+    "typeProperties": {
+      "baseUrl": "@{linkedService().keyVaultUrl}"
+    },
+    "parameters": {
+      "keyVaultUrl": {
+        "type": "String",
+        "defaultValue": "https://kv-retail-de-dev.vault.azure.net/"
+      }
+    }
+  }
+}

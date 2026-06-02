@@ -1,0 +1,77 @@
+{
+  "name": "pl_ingest_stores",
+  "properties": {
+    "description": "Ingest store metadata from Cosmos DB to landing CSV",
+    "activities": [
+      {
+        "name": "Copy Cosmos Stores to Landing",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "typeProperties": {
+          "source": {
+            "type": "CosmosDbSqlApiSource",
+            "query": "SELECT c.store_id, c.store_name, c.city, c.state, c.postal_code, c.region, c.opened_date FROM c"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobFSWriteSettings"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".csv"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_cosmos_stores",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_landing_retail_csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "lakeStorageAccountUrl": "@pipeline().parameters.lakeStorageAccountUrl",
+              "lakeContainer": "@pipeline().parameters.lakeContainer",
+              "landingFolder": "@concat(pipeline().parameters.landingPathPrefix, '/stores')",
+              "landingFileName": "stores.csv"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "environment": {
+        "type": "String",
+        "defaultValue": "dev"
+      },
+      "lakeStorageAccountUrl": {
+        "type": "String"
+      },
+      "lakeContainer": {
+        "type": "String",
+        "defaultValue": "retaildatalake"
+      },
+      "landingPathPrefix": {
+        "type": "String",
+        "defaultValue": "landing"
+      }
+    },
+    "annotations": [
+      "retail",
+      "ingest",
+      "stores",
+      "cosmosdb"
+    ]
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}

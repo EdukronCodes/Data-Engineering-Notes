@@ -1,0 +1,21 @@
+{
+  "name": "ds_rest_customers",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_rest_customers",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "relativeUrl": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "annotations": [],
+    "type": "RestResource",
+    "typeProperties": {
+      "relativeUrl": "@{dataset().relativeUrl}"
+    },
+    "schema": []
+  }
+}

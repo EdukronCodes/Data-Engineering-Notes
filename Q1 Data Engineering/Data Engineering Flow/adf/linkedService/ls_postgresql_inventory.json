@@ -1,0 +1,36 @@
+{
+  "name": "ls_postgresql_inventory",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "Inventory snapshots in PostgreSQL Flexible Server",
+    "annotations": [],
+    "type": "PostgreSqlV2",
+    "typeProperties": {
+      "server": "@{linkedService().serverName}",
+      "port": 5432,
+      "database": "@{linkedService().databaseName}",
+      "username": "@{linkedService().userName}",
+      "password": {
+        "type": "SecureString",
+        "value": "REPLACE_AT_DEPLOY"
+      },
+      "sslMode": "VerifyFull",
+      "trustServerCertificate": false,
+      "authenticationType": "Basic"
+    },
+    "parameters": {
+      "serverName": {
+        "type": "String",
+        "defaultValue": "psql-retailde-ci3546.postgres.database.azure.com"
+      },
+      "databaseName": {
+        "type": "String",
+        "defaultValue": "inventory"
+      },
+      "userName": {
+        "type": "String",
+        "defaultValue": "pgadmin"
+      }
+    }
+  }
+}

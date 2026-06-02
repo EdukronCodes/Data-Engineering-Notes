@@ -1,0 +1,35 @@
+{
+  "name": "ds_source_retail_csv",
+  "properties": {
+    "description": "Parameterized CSV source from retail source storage",
+    "linkedServiceName": {
+      "referenceName": "ls_adls_retail_sources",
+      "type": "LinkedServiceReference",
+      "parameters": {
+        "storageAccountUrl": "@dataset().sourceStorageAccountUrl"
+      }
+    },
+    "parameters": {
+      "sourceStorageAccountUrl": { "type": "String" },
+      "sourceContainer": { "type": "String" },
+      "sourceFolder": { "type": "String" },
+      "sourceFileName": { "type": "String" }
+    },
+    "annotations": [],
+    "type": "DelimitedText",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobFSLocation",
+        "fileName": "@{dataset().sourceFileName}",
+        "folderPath": "@{dataset().sourceFolder}",
+        "fileSystem": "@{dataset().sourceContainer}"
+      },
+      "columnDelimiter": ",",
+      "escapeChar": "\\",
+      "firstRowAsHeader": true,
+      "quoteChar": "\""
+    },
+    "schema": []
+  },
+  "type": "Microsoft.DataFactory/factories/datasets"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "ds_azure_sql_pos",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "ls_azure_sql_pos",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {},
+    "annotations": [],
+    "type": "AzureSqlTable",
+    "typeProperties": {
+      "schema": "dbo",
+      "table": "pos_transactions"
+    },
+    "schema": []
+  }
+}
