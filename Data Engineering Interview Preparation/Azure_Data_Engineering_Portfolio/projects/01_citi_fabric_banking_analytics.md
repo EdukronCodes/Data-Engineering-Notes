@@ -1,5 +1,7 @@
 # Citi Bank (EMEA): Enterprise Banking Data Analytics Platform on Microsoft Fabric
 
+**Single-file project document:** architecture, all 12 flow diagrams, technical notes, examples, controls, deployment and recovery guidance are included in this Markdown file. No separate diagram assets or handbook are required.
+
 > Evidence status: the client and project labels were supplied by the user. Architecture, datasets, responsibilities and implementation below are proposed reference designs for preparation. They are not verified descriptions of a client's internal platform. Replace illustrative details with actual experience before using them as employment claims.
 
 ## Project profile
@@ -128,7 +130,7 @@ Use Microsoft Entra ID groups and least-privilege workload identities. Apply ADL
 6. CI/CD definition, infrastructure code, rollback procedure and cost baseline.
 7. Lineage documentation, ownership/access matrix, operating dashboard and runbook.
 
-These documents describe the implementation; they are not a deployed platform or evidence of work performed for the named client. Use the shared implementation handbook for code patterns, an executable build sequence, recovery handling and acceptance templates.
+These documents describe the implementation; they are not a deployed platform or evidence of work performed for the named client. The implementation reference at the end of this file provides code patterns, a build sequence, recovery handling and acceptance templates.
 
 
 ## Interview walkthrough
@@ -353,7 +355,7 @@ stateDiagram-v2
 ```
 
 
-`STARTED` means a run exists; `LANDED` means its inputs are durable; `TRANSFORMED` means a candidate output exists; `VALIDATED` means the critical checks passed; `PUBLISHED` means consumers can read the accepted output. `HELD` indicates a deliberate business/control stop and `FAILED` indicates an execution failure. Extend the handbook's minimal control-table status constraint if you implement these additional states. The diagram is a recommended lifecycle, not a claim that the existing example DDL already includes every state.
+`STARTED` means a run exists; `LANDED` means its inputs are durable; `TRANSFORMED` means a candidate output exists; `VALIDATED` means the critical checks passed; `PUBLISHED` means consumers can read the accepted output. `HELD` indicates a deliberate business/control stop and `FAILED` indicates an execution failure. Extend this file's example control-table status constraint if you implement these additional states. The diagram is a recommended lifecycle, not a claim that the existing example DDL already includes every state.
 
 Track state transitions with timestamps, actor/workload identity, reason and artifact IDs. A retry is an attempt tied to the original business input. Replaying a publication should not create extra fact rows, duplicate daily aggregates or misleading extra accepted runs.
 
@@ -473,7 +475,7 @@ Alert on accepted-data age as well as job failure. A pipeline can finish success
 
 ### Plain-text fallback flow
 
-Some Markdown viewers do not render Mermaid. The original architecture section and the following text retain the core flow in those viewers:
+All diagrams are embedded directly below their corresponding project sections using Mermaid. Markdown viewers with Mermaid support display them inline. The original architecture section and the following text retain the core flow in those viewers:
 
 ```text
 Core banking / approved regional extracts --> Azure landing or gateway --> Fabric pipeline --> OneLake bronze --> Fabric Spark silver --> gold Delta tables --> Power BI semantic model --> approved EMEA analytics users
@@ -485,3 +487,437 @@ Core banking / approved regional extracts --> Azure landing or gateway --> Fabri
 6. On acceptance: publish -> record accepted boundary -> expose to consumers.
 7. Monitor freshness, correctness, access, performance and recovery.
 ```
+
+<!-- DEEP_NOTES_START -->
+
+## Extended project notes: source, model, dependencies and serving
+
+### Diagram 8: Individual source-to-bronze ingestion
+
+```mermaid
+flowchart TD
+  S0[Core transaction lines] --> C0[Validate source-specific contract]
+  C0 --> R0[Bounded identified raw input]
+  R0 --> M[Delivery or event manifest and provenance]
+  S1[Account and customer versions] --> C1[Validate source-specific contract]
+  C1 --> R1[Bounded identified raw input]
+  R1 --> M[Delivery or event manifest and provenance]
+  S2[Balance snapshots] --> C2[Validate source-specific contract]
+  C2 --> R2[Bounded identified raw input]
+  R2 --> M[Delivery or event manifest and provenance]
+  S3[Dated FX and product references] --> C3[Validate source-specific contract]
+  C3 --> R3[Bounded identified raw input]
+  R3 --> M[Delivery or event manifest and provenance]
+  M --> B[Bronze with explicit schema and source metadata]
+  B --> V{Complete valid input scope?}
+  V -->|No| H[Hold or approved restricted quarantine]
+  V -->|Yes| T[Versioned domain transformation]
+```
+
+Validate each source separately before combining its records. Database changes, manifested files and event deliveries have different completeness/replay semantics. Preserve source keys, boundary and arrival metadata even after standardization.
+
+### Diagram 9: Transformation dependency graph
+
+```mermaid
+flowchart LR
+  N0[Customer versions]
+  N1[Account versions]
+  N0 --> N1
+  N2[Transaction facts]
+  N1 --> N2
+  N3[Dated FX]
+  N3 --> N2
+  N4[Balance source]
+  N5[Balance facts]
+  N4 --> N5
+  N6[Banking publication]
+  N2 --> N6
+  N5 --> N6
+```
+
+An arrow means the downstream stage requires an accepted upstream artifact/version. This is the business dependency graph, not proof that all upstream systems run on a single schedule. Record version/as-of dependencies for independently published data.
+
+### Diagram 10: Logical data relationships
+
+```mermaid
+erDiagram
+  dim_customer ||--o{ dim_account : "customer ownership context"
+  dim_account ||--o{ fact_transaction : "account version at event time"
+  dim_account ||--o{ fact_daily_balance : "account version at snapshot time"
+  fact_fx_rate ||--o{ fact_transaction : "approved dated conversion"
+  dim_account { string account_sk PK string account_id string customer_id timestamp valid_from timestamp valid_to }
+  fact_transaction { string transaction_id string line_id string account_sk FK decimal amount string currency_code timestamp event_ts }
+  fact_daily_balance { string account_sk FK date business_date decimal closing_balance string currency_code }
+  fact_fx_rate { date rate_date string from_currency string to_currency string rate_type decimal fx_rate }
+```
+
+The ER view shows logical analytical relationships, not deployed foreign-key enforcement. Some edges express as-of or control-scope relationships rather than direct physical foreign keys. Reconcile this view with the model dictionary and actual physical schemas; composite uniqueness follows the stated grain.
+
+### Diagram 11: Accepted publication-to-consumer flow
+
+```mermaid
+flowchart TD
+  A[Validated staged output] --> B[Acceptance evidence and dependency manifest]
+  B --> C{Product policy satisfied?}
+  C -->|No| D[Hold publication and notify owner]
+  C -->|Yes| E[Commit supported table or warehouse output]
+  E --> F[Record accepted publication and as-of boundary]
+  F --> G[Consumer route resolves accepted dataset]
+  G --> H[Authorized SQL or semantic model query]
+  H --> I[Business report with explicit grain and date]
+  J[Identity and permitted access scope] -.-> H
+  K[Measure and reporting contract] -.-> I
+  F --> L[Freshness and correctness monitoring]
+```
+
+The consumer product is gold banking facts and Power BI measures. Define how the actual serving route selects accepted data. A manifest alone does not secure or atomically switch readers; implement compatible views/version selection/transactions for the chosen engine and validate concurrent reads.
+
+### Diagram 12: Historical correction and dependent rebuild
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant SRC as Source or business owner
+  participant RAW as Durable raw history
+  participant ENG as Versioned transformation
+  participant CTL as Critical controls
+  participant PUB as Accepted publication
+  participant BI as Dependent consumer
+  SRC->>RAW: Deliver identified correction with authoritative ordering
+  RAW->>ENG: Supply correction and required historical scope
+  ENG->>ENG: Resolve affected dates keys and reference versions
+  ENG->>CTL: Submit recomputed candidate and control evidence
+  alt Controls fail
+    CTL-->>SRC: Hold and request owner resolution
+  else Controls pass
+    CTL->>PUB: Release traceable replacement revision
+    PUB->>BI: Expose accepted boundary and refresh affected scope
+    BI-->>CTL: Confirm intended reporting result
+  end
+```
+
+Correction scope includes transaction business date, historical account version and dated FX reference. Source arrival time does not automatically determine the historical business period affected. Preserve prior acceptance metadata, use authoritative ordering and verify downstream refresh behavior.
+
+### Detailed implementation decisions and operating notes
+
+#### 1. Source preparation and regional time
+
+Document a source timezone and reporting/business-date conversion for every feed. Capture source control totals by currency and region and establish which transaction statuses count as posted activity. A UTC ingestion timestamp identifies arrival; it must not silently become the posting date.
+
+#### 2. Historical entity resolution
+
+Build customer/account effective intervals and test nonoverlap. Resolve each transaction using its event/posting time under the approved contract. Record an unresolved-key exception instead of assigning a convenient current account version.
+
+#### 3. FX and money rules
+
+Use explicit decimal precision and the approved rate date/type. Persist original and converted amounts plus the rate identifier. Define when rounding occurs; aggregate-and-round can differ from round-each-line-and-aggregate.
+
+#### 4. Balance and transaction separation
+
+Transaction amounts are event-based; balances are time snapshots. Preserve separate facts and reporting measures. Validate opening/closing movement only when source feeds and ledger policy support that equation.
+
+#### 5. Publication
+
+Keep engineering staging hidden from consumers. A product manifest should identify accepted transaction and balance boundaries plus reference/rule versions; independently refreshed facts require explicit as-of display.
+
+#### 6. Correction
+
+A higher-sequence correction affects the original transaction business date and any derived aggregate. Reconcile the corrected currency/date scope, publish a traceable replacement and refresh the relevant BI scope.
+
+### Pipeline/notebook contract and evidence packet
+
+Every transformation should receive an identified input scope and produce an identified candidate. Suggested logical fields are `run_id`, `attempt_id`, `entity_id`, source boundary or delivery ID, business-date range, contract version, code/rule version, reference versions and output location. Validate paths/identifiers and bind values using supported APIs. These are recommended control fields, not an existing deployed application interface.
+
+Persist input completeness, accepted/rejected/duplicate/conflict counts and the applicable reconciliation totals. Do not conflate a retried attempt with a new source business delivery. A publish decision records which candidate and dependencies were accepted. If table writes and the control store are separate systems, reconcile the outcome after a crash; avoid claiming a distributed atomic commit that the implementation does not provide.
+
+### Synthetic acceptance fixtures
+
+| Case | Input or fault | Expected behavior |
+|---|---|---|
+| Duplicate TX100 line 1 | Same sequence and payload twice | One business line and unchanged signed total |
+| Contradictory sequence | Same key/sequence but two amounts | Critical conflict; no arbitrary latest row |
+| Missing FX | Valid transaction but absent dated rate | Held or explicitly approved suspense; no invented rate |
+| Historical account change | Account version changes after posting | Join the version effective at posting time |
+| Two balance dates | 100 closing then 120 closing | Selected latest-date balance is 120, not 220 |
+| Late posting | Yesterday event arrives today | Reconcile/rebuild yesterday under dated references |
+
+Retain the input, expected business result, actual result, rule/reference versions and run/publication IDs for each fixture. Cases are proposed tests and have not executed against cloud resources. Add representative volume/concurrency checks after the correctness cases pass.
+
+### Normal-day operating walkthrough
+
+1. Check expected source deliveries/events and the last accepted business boundary.
+2. Verify required reference/dependency versions, execution identity and resource availability.
+3. Land durable input and record its manifest/provenance.
+4. Transform the bounded scope and preserve restricted exception evidence.
+5. Evaluate keys, reference coverage, quality and source-to-target totals.
+6. Publish only the accepted scope and record the consumer-visible as-of/revision.
+7. Verify consumer access and business queries; monitor accepted-data age and resource cost.
+
+### Incident walkthrough and ownership
+
+The source owner resolves missing/corrected deliveries and source business semantics. The engineer resolves extraction/processing/target behavior. The data steward resolves approved reference/quality exceptions. The product/reporting owner accepts the consumer result. Assign actual teams and escalation routes before production; these are responsibilities to fill in, not assumed client organization details.
+
+For an incident, identify its impacted product and last accepted boundary before rerunning anything. Preserve raw input, code/configuration version and the failed control. Determine whether publication already happened. Recover the smallest complete business scope, revalidate, then verify the dependent report/API result. A green pipeline without restored accepted freshness does not close the incident.
+
+### Performance and cost evidence to collect
+
+Measure extraction, source pressure, listing/read throughput, transformation/shuffle time, target writing, reconciliation and serving queries separately. Capture the workload boundary and concurrency with each benchmark. Tune a demonstrated bottleneck, compare equivalent before/after cases, and retain correctness/recovery checks. No volumes, capacity sizes or percentage savings in these notes are verified client metrics.
+
+### Explain the whole flow during an interview
+
+Start with the business output and its grain. Draw the full architecture and the source-specific flow. Explain the dependency order and one historical/reference join. Show the accepted-publication path and a consumer query. Walk through a correction using Diagram 12, then show one acceptance fixture and the evidence that would prove the result. State precisely which parts you personally performed when discussing actual employment.
+
+## Embedded implementation reference
+
+This is a reference implementation guide for the six proposed project designs. Code uses illustrative tables and schemas. It requires Azure resources, approved source access, runtime configuration and synthetic/approved test data; the Markdown files do not provision or run Azure services.
+
+### 1. Build sequence
+
+1. Select one project and define a minimal vertical slice: one source entity, one transformation, one validated gold dataset and one consumer query.
+2. Create a development Azure resource group, ADLS Gen2 account with hierarchical namespace, ADF instance, Azure SQL metadata database, Key Vault and Databricks workspace. For the Fabric project create licensed/capacity-backed Fabric workspaces and Lakehouses instead of assuming an Azure storage account is OneLake.
+3. Assign workload identity permissions, catalog/table grants, storage ACLs and source access. Validate networking and DNS. Create separate development/test/production configurations before deployment.
+4. Create raw paths and bronze/silver/gold Delta tables with explicit schemas. In Databricks use Unity Catalog storage credentials/external locations as appropriate; in Fabric attach the correct Lakehouse to the notebook.
+5. Create control tables, register an approved entity and seed its initial boundary. Load a small synthetic snapshot, including intentionally invalid and duplicate records.
+6. Build the source extraction pipeline, notebook transformations, reconciliation and publication gate. Record durable input and output locations for every run.
+7. Implement one insert, update, delete and late-arrival scenario. Replay input twice. Validate the accepted result and recovery after a simulated failure.
+8. Create a serving view/semantic model and validate both its numbers and access with consumer identities.
+9. Add monitoring, CI/CD, infrastructure code, deployment parameters, operating procedures and a measured performance/cost baseline.
+10. Scale only after correctness passes; use the project-specific acceptance controls before declaring completion.
+
+### 2. Storage and metadata contracts
+
+```text
+landing/<source>/<entity>/business_date=YYYY-MM-DD/run_id=<uuid>/
+bronze/<domain>/<entity>/                  # raw records plus ingestion metadata
+silver/<domain>/<entity>/                  # conformed business records
+gold/<product>/<dataset>/                  # accepted analytical datasets
+quarantine/<domain>/<entity>/run_id=<uuid>/ # restricted failed records
+checkpoints/<stream_name>/                 # one durable path per stream
+```
+
+These are ADLS examples. Fabric Files/Tables organization and managed catalog tables have their own locations. Do not manually move files inside a managed Delta table. Avoid subscriber/customer ID partitions; choose partitioning only after measuring date filtering, volume and file sizes.
+
+```sql
+-- Azure SQL orchestration metadata; add access, indexing and retention policies.
+CREATE TABLE dbo.entity_state (
+ entity_id varchar(100) PRIMARY KEY,
+ accepted_watermark datetime2(7) NULL,
+ accepted_run_id uniqueidentifier NULL,
+ state_version rowversion
+);
+CREATE TABLE dbo.pipeline_run (
+ run_id uniqueidentifier PRIMARY KEY,
+ entity_id varchar(100) NOT NULL,
+ old_watermark datetime2(7) NULL,
+ new_watermark datetime2(7) NULL,
+ status varchar(20) NOT NULL,
+ source_count bigint NULL,
+ target_count bigint NULL,
+ started_at datetime2(7) NOT NULL,
+ ended_at datetime2(7) NULL,
+ CONSTRAINT CK_run_status CHECK
+  (status IN ('STARTED','LANDED','VALIDATED','PUBLISHED','FAILED'))
+);
+```
+
+Acquire a per-entity lease or use a serialized scheduler so two runs cannot publish the same boundary concurrently. Restrict configuration changes to reviewed values; table identifiers need allow-list validation because SQL parameters do not parameterize object names.
+
+### 3. ADF incremental orchestration
+
+```text
+Lookup approved entity configuration
+  -> acquire entity lock
+  -> read last accepted boundary
+  -> capture bounded source upper boundary
+  -> create STARTED run record
+  -> Copy bounded source rows into immutable run directory
+  -> validate landing manifest / mark LANDED
+  -> invoke Databricks notebook
+  -> quality checks + reconciliation / mark VALIDATED
+  -> publish accepted product
+  -> compare-and-set accepted boundary / mark PUBLISHED
+  -> release lock
+Failure path: mark FAILED + preserve input + alert owner + release lock
+```
+
+For Fabric use supported Fabric pipeline/notebook/control-state mechanisms rather than assuming every ADF activity or connector is identical.
+
+```sql
+-- Bounded example query; timestamp semantics must be agreed with the source.
+SELECT transaction_id, source_sequence, modified_at, amount, currency_code
+FROM dbo.source_transaction
+WHERE modified_at > @old_watermark
+  AND modified_at <= @new_watermark;
+```
+
+A timestamp alone is safe only if the source's commit/update behavior guarantees it. Concurrent or late commits can otherwise fall behind the accepted boundary. Prefer source-supported CDC or consistent snapshots with a commit-ordered change boundary. If using a lookback overlap, deduplicate it and document residual risks. Use a timestamp plus key cursor for deterministic page ordering; this does not fix backdated updates or deletes. Timestamp extraction cannot detect hard deletes without a deletion feed or complete-snapshot comparison.
+
+Advance state only after successful acceptance. Publication and Azure SQL state are usually in different transaction systems: use a durable publication manifest and idempotent reconciliation so a crash between them can resume safely. Never claim they are one atomic distributed transaction.
+
+### 4. PySpark validation and deterministic deduplication
+
+```python
+from pyspark.sql import functions as F, Window
+
+## `input_path`, `quarantine_path`, `silver_table` and `run_id` are validated job parameters.
+schema = ('transaction_id STRING, line_id STRING, source_system STRING, '
+          'source_sequence LONG, modified_at TIMESTAMP, '
+          'amount DECIMAL(28,6), currency_code STRING')
+raw = (spark.read.schema(schema).option('mode', 'FAILFAST')
+       .json(input_path).withColumn('run_id', F.lit(run_id)))
+## FAILFAST fails the batch for malformed JSON. An alternative permissive
+## parser must explicitly capture corrupt records and quarantine them.
+invalid = (F.col('transaction_id').isNull() | F.col('line_id').isNull()
+           | F.col('source_system').isNull() | F.col('source_sequence').isNull()
+           | F.col('modified_at').isNull() | F.col('amount').isNull()
+           | F.col('currency_code').isNull())
+bad = raw.where(invalid)
+good = raw.where(~invalid)
+bad.write.format('delta').mode('overwrite').save(quarantine_path)
+
+keys = ['source_system', 'transaction_id', 'line_id']
+## Assert one payload per key + source_sequence; contradictory ties fail
+## rather than being silently chosen by nondeterministic ordering.
+conflicts = (good.groupBy(*(keys + ['source_sequence']))
+             .agg(F.countDistinct(F.struct('amount', 'currency_code',
+                                          'modified_at')).alias('payloads'))
+             .where('payloads > 1'))
+if conflicts.limit(1).count():
+    raise ValueError('Conflicting payloads for a source sequence')
+window = Window.partitionBy(*keys).orderBy(F.col('source_sequence').desc())
+latest = (good.dropDuplicates(keys + ['source_sequence'])
+          .withColumn('rn', F.row_number().over(window))
+          .where('rn = 1').drop('rn'))
+latest.createOrReplaceTempView('transaction_latest')
+```
+
+Implement format, membership, uniqueness and reconciliation rules separately; null checks alone are not a complete quality framework. The subsequent MERGE target must already exist with a compatible schema. Run the critical quality gate before publication; a valid-row table may be staged even when the batch is held.
+
+### 5. Delta upsert and deletion semantics
+
+```sql
+-- Spark SQL / Azure Databricks Delta; source is deduplicated and ordered.
+MERGE INTO silver.transaction AS t
+USING transaction_latest AS s
+ON t.source_system = s.source_system
+ AND t.transaction_id = s.transaction_id AND t.line_id = s.line_id
+WHEN MATCHED AND s.source_sequence > t.source_sequence THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *;
+```
+
+Keep the source sequence on each current record. A later-arriving older update must not overwrite a newer one. For physical deletes, retain ordering in a tombstone ledger or soft-deleted current row if stale events can be replayed; otherwise an old insert can resurrect a deleted entity. Use delete operations only from an explicit CDC contract or an authoritative complete snapshot, never from absence in a partial batch.
+
+Delta change data feed exposes changes already written to Delta. Enable/configure the supported CDF mode for the chosen Databricks runtime, checkpoint consumers, and plan retention/backfills. Do not promise indefinite history or assume Azure Databricks-specific CDF modes are readable in Fabric.
+
+### 6. SCD Type 2 and historical joins
+
+Choose an entity business key, tracked attributes and effective-time source. Use half-open intervals `[valid_from, valid_to)` and a sentinel or null end date. Assert no overlapping intervals and at most one current row per key.
+
+```sql
+-- Spark SQL historical dimension lookup.
+SELECT f.transaction_id, f.line_id, d.account_sk, f.amount
+FROM silver.transaction f
+LEFT JOIN silver.dim_account d
+ ON f.account_id = d.account_id
+ AND f.event_ts >= d.valid_from
+ AND (d.valid_to IS NULL OR f.event_ts < d.valid_to);
+```
+
+Count matches: zero requires an approved unknown/suspense policy; more than one is a critical integrity failure. For an out-of-order dimension change, recompute that key's timeline from ordered source history and identify affected facts. A naive close-current-and-insert routine can misrepresent late history. Hashes can compare attributes but are not business keys or proof of equivalence without canonical types/null handling.
+
+### 7. Streaming state and replay
+
+Event Hubs ingestion uses its supported Spark integration for the selected runtime. Persist the original source identifier, event ID, event timestamp and producer sequence. Keep one durable checkpoint per query and environment. Validate connector/authentication options against the installed runtime.
+
+```python
+## `events` is an already parsed streaming DataFrame from the approved source.
+deduped = (events.withWatermark('event_ts', '2 hours')
+           .dropDuplicatesWithinWatermark(['source_system', 'event_id']))
+query = (deduped.writeStream.format('delta')
+         .option('checkpointLocation', checkpoint_path)
+         .outputMode('append').start(bronze_delta_path))
+```
+
+The two-hour window is an illustrative configuration, not an SLA. Verify runtime support for `dropDuplicatesWithinWatermark`; if unavailable use an explicitly designed alternative with measured state behavior. Windowed deduplication expires state and can accept replays beyond the horizon. Enforce durable business-key idempotency in silver, retain raw data, and reconcile late partitions. `foreachBatch` handlers must be idempotent because microbatches can execute again; a checkpoint alone does not make arbitrary external writes exactly once.
+
+### 8. Financial and operational reconciliation
+
+Record expected and observed counts and decimal totals at matching grain. Counts alone can miss a duplicated row replacing a missing row. Combine key uniqueness, missing-key comparisons, signed totals, reference coverage and independent samples.
+
+| Control | Expected evidence | Failure action |
+|---|---|---|
+| Manifest completeness | Declared files/rows vs landed files/rows | Hold batch and request missing delivery |
+| Key uniqueness | Distinct business keys equal accepted record count | Resolve source duplicates/conflicts |
+| Financial amounts | Decimal totals by date/entity/currency | Hold publication and investigate |
+| Dimension resolution | Exactly one historical match per eligible fact | Fix timeline or agreed suspense policy |
+| Freshness | Last accepted business timestamp vs target | Alert owner even if jobs succeeded |
+| Replay | Same input creates same business output | Fix idempotency before go-live |
+
+Define tolerance from an approved rounding/accounting policy; do not use an arbitrary percentage to suppress differences. Keep rejected-row counts in the balance equation. Test `source = accepted + rejected` where the extract contract and deduplication rules make that equation applicable.
+
+### 9. CI/CD and infrastructure
+
+Suggested repository structure:
+
+```text
+infra/                 # Bicep/Terraform, parameters, network/identity declarations
+pipelines/             # ADF/Fabric definitions and deployment configuration
+notebooks/             # parameterized PySpark transformations
+sql/                   # metadata DDL and engine-specific serving objects
+contracts/             # reviewed schemas and data-product definitions
+tests/fixtures/        # synthetic examples and expected outputs
+tests/integration/     # connectivity/replay/reconciliation scenarios
+monitoring/            # queries, dashboards and alert definitions
+runbooks/              # recovery, access and cutover procedures
+```
+
+PR validation checks code/contracts and meaningful fixtures. Test deployment creates resources/configuration and executes the vertical slice. Production promotion uses a reviewed artifact, environment identity, approved parameters and release evidence. Fabric Git/deployment support differs by item type; verify the actual items before promising fully automated promotion. Migration rollback can require recovering data, not just reverting a notebook.
+
+### 10. Performance, costs and observability
+
+Measure extraction bottleneck, shuffle volume, skew, file counts, read amplification, concurrency and serving query latency. Tune one measured bottleneck at a time. Do not apply repartition, caching, broadcast joins, clustering or partitioning mechanically. Avoid tiny files and full-table scans in daily incremental jobs. Run maintenance only under the retention policy; aggressive VACUUM can remove replay/time-travel data still needed by consumers.
+
+Monitor pipeline failure, accepted-data age, reconciliation difference, quarantine rate, streaming lag, execution duration and cost per accepted batch. Use ADF diagnostics and Azure logs where available; use Fabric monitoring and capacity metrics for Fabric workloads rather than assuming all internal events automatically appear in Log Analytics. Benchmark representative data and concurrency and retain before/after results.
+
+### 11. Production recovery runbook
+
+1. Identify the failed run, entity, boundary, input manifest and affected consumers.
+2. Prevent concurrent publication for the affected entity; preserve raw input and error evidence.
+3. Determine whether landing, transformation, quality, serving publication or state update failed.
+4. Resume from the durable phase using the same business input. If publication succeeded but state did not, reconcile the manifest and advance state without appending duplicate facts.
+5. Revalidate keys, amounts, quality and access; release only the accepted output.
+6. Confirm freshness restored, communicate through the approved incident route, and document root cause and prevention.
+
+Recovery objectives must be backed by tested infrastructure/data restoration. Delta time travel alone is not a complete disaster recovery strategy. Agree source retention, checkpoints, configuration backups, identity/network recovery and regional constraints.
+
+### 12. Completion checklist and evidence form
+
+- [ ] Source owner and data-product owner confirmed.
+- [ ] Source snapshot/change semantics documented, including deletes.
+- [ ] Reconciliation, critical quality gates and access tests passed.
+- [ ] Replay, partial failure, late data and schema-change scenarios passed.
+- [ ] Deployment/rollback/recovery demonstrated in the target environment.
+- [ ] Freshness, RPO/RTO and cost targets agreed and measured.
+- [ ] Consumer acceptance recorded with run/publication IDs.
+
+```text
+Project / entity:
+Input manifest / source boundary:
+Contract / rule version:
+Run ID / publication ID:
+Source / accepted / rejected counts:
+Reconciliation totals / differences:
+Failure and replay evidence:
+Performance baseline / result / measurement period:
+Access test identities and outcomes:
+Business acceptance owner and date:
+```
+
+### Official technical references
+
+- [Fabric medallion lakehouse architecture](https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture)
+- [Fabric end-to-end lakehouse tutorial](https://learn.microsoft.com/en-us/fabric/data-engineering/tutorial-lakehouse-introduction)
+- [ADF incremental ingestion with watermarks](https://learn.microsoft.com/en-us/azure/data-factory/tutorial-incremental-copy-portal)
+- [Azure Databricks MERGE reference](https://learn.microsoft.com/en-us/azure/databricks/sql/language-manual/delta-merge-into)
+- [Azure Databricks change data feed](https://learn.microsoft.com/en-us/azure/databricks/delta/delta-change-data-feed)
+- [Microsoft Purview governance setup](https://learn.microsoft.com/en-us/purview/data-governance-get-started)
