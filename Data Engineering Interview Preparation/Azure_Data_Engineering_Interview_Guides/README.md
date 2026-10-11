@@ -54,8 +54,6 @@ The [project portfolio](../Azure_Data_Engineering_Portfolio/README.md) links six
 
 Documents contain questions, detailed explanatory answers, scenario investigation/correction/verification, and practical implementation guidance with selected code/flow examples. They do not provision cloud resources or demonstrate that production configurations have been executed. Retain only verified personal experience in resume/project answers.
 
+## Two-paragraph answer format
 
-## Expanded answer format
-
-Each core/advanced answer now includes the direct answer, a question-specific explanation, a practical example and relevant implementation guidance. Each scenario explains the relevant failure/correctness issue, investigation and correction, a practical example, and how to verify the result. Practical exercises include reasoning and completion requirements; selected questions include illustrative code or flow implementations. All 1,000 answers use **Answer**, with the earlier short-answer format removed.
-
+All 1,000 questions have exactly two detailed prose paragraphs. The first explains the concept, implementation or troubleshooting response. The second develops a practical example, tradeoffs and the relevant validation. Answer, Explanation, Practical example and similar subsection labels have been removed from every answer. Selected code/flow references remain in an implementation-reference section within the corresponding technology file, so answers themselves retain the requested two-paragraph format.

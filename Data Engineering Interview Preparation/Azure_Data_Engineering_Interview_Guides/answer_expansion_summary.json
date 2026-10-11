@@ -1,0 +1,142 @@
+[
+  {
+    "file": "01_Azure_Data_Factory_ADF_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7681,
+    "minimum_answer_words": 70
+  },
+  {
+    "file": "02_Azure_Databricks_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7688,
+    "minimum_answer_words": 65
+  },
+  {
+    "file": "03_ADLS_Gen2_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7557,
+    "minimum_answer_words": 63
+  },
+  {
+    "file": "04_Microsoft_Fabric_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7541,
+    "minimum_answer_words": 70
+  },
+  {
+    "file": "05_Azure_Synapse_Analytics_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7616,
+    "minimum_answer_words": 60
+  },
+  {
+    "file": "06_PySpark_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7386,
+    "minimum_answer_words": 70
+  },
+  {
+    "file": "07_SQL_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7442,
+    "minimum_answer_words": 64
+  },
+  {
+    "file": "08_Python_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7434,
+    "minimum_answer_words": 59
+  },
+  {
+    "file": "09_Delta_Lake_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7390,
+    "minimum_answer_words": 66
+  },
+  {
+    "file": "10_Unity_Catalog_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7305,
+    "minimum_answer_words": 63
+  },
+  {
+    "file": "11_Azure_SQL_Database_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7336,
+    "minimum_answer_words": 68
+  },
+  {
+    "file": "12_Azure_Event_Hubs_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7327,
+    "minimum_answer_words": 62
+  },
+  {
+    "file": "13_Apache_Kafka_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7441,
+    "minimum_answer_words": 63
+  },
+  {
+    "file": "14_Azure_DevOps_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7149,
+    "minimum_answer_words": 60
+  },
+  {
+    "file": "15_Git_GitHub_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7241,
+    "minimum_answer_words": 60
+  },
+  {
+    "file": "16_Power_BI_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7391,
+    "minimum_answer_words": 64
+  },
+  {
+    "file": "17_Azure_Key_Vault_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7341,
+    "minimum_answer_words": 62
+  },
+  {
+    "file": "18_Azure_Monitor_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7326,
+    "minimum_answer_words": 60
+  },
+  {
+    "file": "19_Azure_Functions_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7195,
+    "minimum_answer_words": 61
+  },
+  {
+    "file": "20_Azure_Logic_Apps_Interview_Questions.md",
+    "questions": 50,
+    "paragraphs": 100,
+    "words": 7279,
+    "minimum_answer_words": 62
+  }
+]
