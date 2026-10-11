@@ -1,10 +1,10 @@
 # SQL — Complete Interview Question Guide
 
-**50 questions with model answers:** 10 core, 5 advanced, 25 scenario-based, 5 practical exercises and 5 architecture/project questions.
+**50 questions with detailed answers:** 10 core, 5 advanced, 25 scenario-based, 5 practical exercises and 5 architecture/project questions.
 
 **Focus:** Relational querying, data modeling, transformation correctness and query performance.
 
-**Audience:** Azure data engineering interviews, from fundamentals through production troubleshooting and design. The model answers are concise starting points; expand them with the actual source semantics, engine/runtime, workload identity and acceptance evidence. Practice scenarios are hypothetical and are not claims about the named client projects.
+**Audience:** Azure data engineering interviews, from fundamentals through production troubleshooting and design. Each answer explains the concept, its practical use and implementation context. Scenario answers cover the cause, investigation, correction and verification. Check source semantics, engine/runtime, workload identity and acceptance evidence for your actual configuration. Practice scenarios are hypothetical and are not claims about the named client projects.
 
 ## Contents
 
@@ -27,65 +27,125 @@ For this guide, the primary unit is **one transformation query or stored-procedu
 
 ### C01. How do INNER and LEFT JOIN differ?
 
-**Model answer:** INNER retains matching pairs; LEFT preserves left rows with nulls for unmatched right rows. Duplicate matches can multiply rows in either join.
+**Answer:** INNER retains matching pairs; LEFT preserves left rows with nulls for unmatched right rows. Duplicate matches can multiply rows in either join.
+
+**Explanation:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
 
 ### C02. How do WHERE and HAVING differ?
 
-**Model answer:** WHERE filters input rows before grouping; HAVING filters grouped results. Avoid moving predicates if the change alters outer-join or aggregation semantics.
+**Answer:** WHERE filters input rows before grouping; HAVING filters grouped results. Avoid moving predicates if the change alters outer-join or aggregation semantics.
+
+**Explanation:** Filtering before or after aggregation changes the population. Outer joins also react differently to predicates placed in ON versus WHERE.
+
+**Practical example:** A right-table WHERE condition can remove null-extended rows that a LEFT JOIN was intended to preserve.
 
 ### C03. How do UNION and UNION ALL differ?
 
-**Model answer:** UNION eliminates duplicate result rows; UNION ALL preserves them. Choose from business semantics, not just speed.
+**Answer:** UNION eliminates duplicate result rows; UNION ALL preserves them. Choose from business semantics, not just speed.
+
+**Explanation:** Duplicate elimination is a semantic operation with computational cost. Prefer preserving records unless the contract explicitly requires set uniqueness.
+
+**Practical example:** UNION ALL is appropriate for distinct source deliveries only if duplicate business keys are handled elsewhere.
 
 ### C04. What is a CTE?
 
-**Model answer:** A named query expression used for readability/recursion where supported. It is not inherently a cached result or guaranteed performance improvement.
+**Answer:** A named query expression used for readability/recursion where supported. It is not inherently a cached result or guaranteed performance improvement.
+
+**Explanation:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Practical example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
 
 ### C05. How do window functions differ from GROUP BY?
 
-**Model answer:** Windows calculate over related rows while retaining row detail; GROUP BY changes the output grain. Specify partition and ordering carefully.
+**Answer:** Windows calculate over related rows while retaining row detail; GROUP BY changes the output grain. Specify partition and ordering carefully.
+
+**Explanation:** Window calculations retain rows while grouped aggregation changes grain. Specify key partitioning, authoritative order and frame where applicable.
+
+**Practical example:** Use a window to choose latest events, then group accepted events to daily subscriber totals.
 
 ### C06. How do ROW_NUMBER, RANK and DENSE_RANK differ?
 
-**Model answer:** ROW_NUMBER numbers rows; RANK preserves ties with gaps; DENSE_RANK preserves ties without gaps. Deterministic ordering needs an appropriate tie-breaker.
+**Answer:** ROW_NUMBER numbers rows; RANK preserves ties with gaps; DENSE_RANK preserves ties without gaps. Deterministic ordering needs an appropriate tie-breaker.
+
+**Explanation:** Tie behavior is part of business meaning. A rank function cannot choose an authoritative latest correction when the source provides conflicting equal-order rows.
+
+**Practical example:** Keep both tied winners for ranking requirements, or reject conflicting ties for latest-state ingestion.
 
 ### C07. How should nulls be tested?
 
-**Model answer:** Use IS NULL/IS NOT NULL and explicit null-aware business logic. Equality to NULL does not behave like ordinary value equality.
+**Answer:** Use IS NULL/IS NOT NULL and explicit null-aware business logic. Equality to NULL does not behave like ordinary value equality.
+
+**Explanation:** Unknown values require deliberate classification. NOT IN with a nullable set and ordinary equality to NULL can defeat intended exclusion checks.
+
+**Practical example:** Use a tested null-aware anti-join for missing reference keys and separately report null source keys.
 
 ### C08. What is a primary versus foreign key?
 
-**Model answer:** A primary key identifies a row; a foreign key describes a reference to another key. Enforcement differs by engine, so verify actual constraint behavior.
+**Answer:** A primary key identifies a row; a foreign key describes a reference to another key. Enforcement differs by engine, so verify actual constraint behavior.
+
+**Explanation:** Constraints encode/enforce selected relationships only where the engine supports enforcement. Analytical engines may require explicit integrity checks.
+
+**Practical example:** Do not assume a declared warehouse key prevented duplicates without testing the selected engine's behavior.
 
 ### C09. What is normalization versus a star schema?
 
-**Model answer:** Normalization reduces redundant relational facts; star schemas organize dimensional analytical grains. Choose based on transaction versus reporting needs.
+**Answer:** Normalization reduces redundant relational facts; star schemas organize dimensional analytical grains. Choose based on transaction versus reporting needs.
+
+**Explanation:** Model shape follows workload semantics. Normalized operational entities and dimensional analytical facts solve different access and history problems.
+
+**Practical example:** A journal reporting model can use dimensions around a line-level fact while operational account updates use relational entities.
 
 ### C10. Why use DECIMAL for money?
 
-**Model answer:** It represents specified fixed decimal precision/scale, unlike binary floating point. Rounding and overflow behavior still need explicit policies.
+**Answer:** It represents specified fixed decimal precision/scale, unlike binary floating point. Rounding and overflow behavior still need explicit policies.
+
+**Explanation:** Precision, scale and rounding are part of the contract. Fixed decimal input still needs overflow and aggregation policy checks.
+
+**Practical example:** Reconcile signed debit/credit totals in the agreed decimal scale and transaction currency.
 
 ## B. Advanced implementation questions
 
 ### A01. What makes a predicate sargable?
 
-**Model answer:** It can support efficient access using the engine's indexing/pruning mechanisms. Avoid unnecessary functions/casts on filtered keys and verify the actual plan.
+**Answer:** It can support efficient access using the engine's indexing/pruning mechanisms. Avoid unnecessary functions/casts on filtered keys and verify the actual plan.
+
+**Explanation:** An efficient access predicate must still match timezone and boundary semantics. Rewriting a date expression incorrectly can change which records qualify.
+
+**Practical example:** Use a tested half-open timestamp range for a day when that matches the source/business timezone contract.
 
 ### A02. How do you diagnose query regression?
 
-**Model answer:** Compare plans, estimates, statistics, parameter behavior, blocking and data changes with a prior baseline. Do not add indexes without evidence.
+**Answer:** Compare plans, estimates, statistics, parameter behavior, blocking and data changes with a prior baseline. Do not add indexes without evidence.
+
+**Explanation:** Plan changes can come from data distribution, statistics, parameters, indexes or engine behavior. Compare evidence rather than assuming every regression needs an index.
+
+**Practical example:** A once-selective customer predicate may become expensive after one customer dominates the data.
 
 ### A03. How do isolation levels affect ingestion?
 
-**Model answer:** They govern visibility and concurrency behavior; a source-consistent extraction needs a documented snapshot/change boundary. Isolation names and defaults differ by engine.
+**Answer:** They govern visibility and concurrency behavior; a source-consistent extraction needs a documented snapshot/change boundary. Isolation names and defaults differ by engine.
+
+**Explanation:** Isolation affects what a query can observe under concurrent writes. A bounded extraction also needs a source-supported change/commit contract.
+
+**Practical example:** A stable paginated snapshot and CDC boundary is stronger than repeatedly querying a mutable table with OFFSET.
 
 ### A04. How do you design idempotent upserts?
 
-**Model answer:** Define a unique business key and authoritative version/sequence, then use engine-supported transactional logic and concurrency controls. MERGE semantics differ by engine.
+**Answer:** Define a unique business key and authoritative version/sequence, then use engine-supported transactional logic and concurrency controls. MERGE semantics differ by engine.
+
+**Explanation:** Upsert correctness requires unique source matches and authoritative change order. Concurrency and deletion ordering must be addressed independently of syntax.
+
+**Practical example:** A stale replay must not overwrite a newer accepted amount or resurrect a deleted account.
 
 ### A05. How do you query historical dimensions?
 
-**Model answer:** Join on business key and effective interval, then assert exactly one eligible match per fact. Late changes may require fact re-resolution.
+**Answer:** Join on business key and effective interval, then assert exactly one eligible match per fact. Late changes may require fact re-resolution.
+
+**Explanation:** Effective-time joins require nonoverlapping intervals and an explicit zero-match policy. Current dimension joins can silently restate old facts.
+
+**Practical example:** Use the account mapping effective at posting time and fail if two versions qualify.
 
 ## C. Scenario-based interview questions — 25 scenarios
 
@@ -95,201 +155,402 @@ Answer production scenarios in this order: clarify the business impact and proce
 
 ### S01. A LEFT JOIN loses unmatched rows after a WHERE filter. Why?
 
-**Model answer:** A predicate on right-side values can reject the null-extended rows. Move the predicate to ON only if that matches the intended business semantics.
+**Answer:** A predicate on right-side values can reject the null-extended rows. Move the predicate to ON only if that matches the intended business semantics.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Related practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S02. NOT IN returns no rows when its subquery contains NULL. How do you fix it?
 
-**Model answer:** Use a null-aware NOT EXISTS/anti-join design and define desired handling of null keys explicitly.
+**Answer:** Use a null-aware NOT EXISTS/anti-join design and define desired handling of null keys explicitly.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** Unknown values require deliberate classification. NOT IN with a nullable set and ordinary equality to NULL can defeat intended exclusion checks.
+
+**Related practical example:** Use a tested null-aware anti-join for missing reference keys and separately report null source keys.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S03. A customer join doubles revenue. What do you investigate?
 
-**Model answer:** Check dimension key uniqueness and effective intervals. Establish the correct relationship instead of masking the error with DISTINCT.
+**Answer:** Check dimension key uniqueness and effective intervals. Establish the correct relationship instead of masking the error with DISTINCT.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Related practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S04. A query uses SELECT DISTINCT to hide duplicates. Is that sufficient?
 
-**Model answer:** No. Identify the duplicated grain and join/source cause; DISTINCT may remove legitimate records or conceal incorrect totals.
+**Answer:** No. Identify the duplicated grain and join/source cause; DISTINCT may remove legitimate records or conceal incorrect totals.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Related practical example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S05. Two records share the same latest timestamp. Which should win?
 
-**Model answer:** Use an authoritative source sequence or approved tie-breaker; reject unresolved contradictory ties rather than choosing arbitrarily.
+**Answer:** Use an authoritative source sequence or approved tie-breaker; reject unresolved contradictory ties rather than choosing arbitrarily.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** Tie behavior is part of business meaning. A rank function cannot choose an authoritative latest correction when the source provides conflicting equal-order rows.
+
+**Related practical example:** Keep both tied winners for ranking requirements, or reject conflicting ties for latest-state ingestion.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S06. A daily balance query sums all historical dates. What should change?
 
-**Model answer:** Define selected-date or period-end snapshot semantics. Balances are not additive over time in the same way as transaction amounts.
+**Answer:** Define selected-date or period-end snapshot semantics. Balances are not additive over time in the same way as transaction amounts.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** Window calculations retain rows while grouped aggregation changes grain. Specify key partitioning, authoritative order and frame where applicable.
+
+**Related practical example:** Use a window to choose latest events, then group accepted events to daily subscriber totals.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S07. A date filter wraps the indexed column in a function. What is your optimization?
 
-**Model answer:** Use an equivalent bounded range where correct, then compare access path and results; confirm timezone and inclusive/exclusive boundaries.
+**Answer:** Use an equivalent bounded range where correct, then compare access path and results; confirm timezone and inclusive/exclusive boundaries.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** An efficient access predicate must still match timezone and boundary semantics. Rewriting a date expression incorrectly can change which records qualify.
+
+**Related practical example:** Use a tested half-open timestamp range for a day when that matches the source/business timezone contract.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S08. An update blocks ingestion for minutes. What do you inspect?
 
-**Model answer:** Inspect transaction duration, locks, access paths and isolation behavior; reduce unnecessary scope and keep correctness/concurrency requirements explicit.
+**Answer:** Inspect transaction duration, locks, access paths and isolation behavior; reduce unnecessary scope and keep correctness/concurrency requirements explicit.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** Isolation affects what a query can observe under concurrent writes. A bounded extraction also needs a source-supported change/commit contract.
+
+**Related practical example:** A stable paginated snapshot and CDC boundary is stronger than repeatedly querying a mutable table with OFFSET.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S09. OFFSET pagination skips rows during concurrent inserts. What is better?
 
-**Model answer:** Use a consistent extraction snapshot and deterministic keyset cursor where suitable. Keyset ordering alone does not solve backdated updates.
+**Answer:** Use a consistent extraction snapshot and deterministic keyset cursor where suitable. Keyset ordering alone does not solve backdated updates.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** Isolation affects what a query can observe under concurrent writes. A bounded extraction also needs a source-supported change/commit contract.
+
+**Related practical example:** A stable paginated snapshot and CDC boundary is stronger than repeatedly querying a mutable table with OFFSET.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S10. The same MERGE script runs differently in Spark and Azure SQL. Why?
 
-**Model answer:** Engines differ in SQL syntax, match semantics and transaction behavior. Implement and test an engine-specific version.
+**Answer:** Engines differ in SQL syntax, match semantics and transaction behavior. Implement and test an engine-specific version.
 
-**Verification:** Use relevant execution plan, logical reads or scan bytes, waits and row estimates and confirm the intended table grain, key constraints, types and null semantics. Reproduce the stated failure with a small synthetic or approved test case before declaring it resolved.
+**Why this happens and what matters:** Upsert correctness requires unique source matches and authoritative change order. Concurrency and deletion ordering must be addressed independently of syntax.
+
+**Related practical example:** A stale replay must not overwrite a newer accepted amount or resurrect a deleted account.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### Production integration, recovery and operational scenarios
 
 ### S11. After moving one transformation query or stored-procedure batch to production, an authorization error appears. How would you distinguish identity, permission and connectivity failures?
 
-**Model answer:** Capture the effective caller and exact error, then validate database execution identity, object grants and approved parameter binding. Compare production with the working configuration using execution plan, logical reads or scan bytes, waits and row estimates; do not resolve the incident by giving every identity broad access.
+**Answer:** Capture the effective caller and exact error, then validate database execution identity, object grants and approved parameter binding. Compare production with the working configuration using execution plan, logical reads or scan bytes, waits and row estimates; do not resolve the incident by giving every identity broad access.
 
-**Verification:** Demonstrate the required identity succeeding and an unauthorized identity remaining denied.
+**Why this happens and what matters:** Plan changes can come from data distribution, statistics, parameters, indexes or engine behavior. Compare evidence rather than assuming every regression needs an index.
+
+**Investigation and correction:** Investigate under the real caller rather than the interactive administrator. The relevant path is database execution identity, object grants and approved parameter binding. Capture the exact failure and compare one allowed operation with one deliberately denied operation, so fixing connectivity does not accidentally broaden authorization.
+
+**Related practical example:** A once-selective customer predicate may become expensive after one customer dominates the data.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S12. The health page says SQL is available, but the business result has not advanced. What would you check?
 
-**Model answer:** Trace the expected operation through selected SQL engine and upstream typed staging tables and compare progress in transaction boundary, staging batch ID and accepted output revision. Inspect execution plan, logical reads or scan bytes, waits and row estimates to distinguish a service being reachable from an accepted business operation actually completing.
+**Answer:** Trace the expected operation through selected SQL engine and upstream typed staging tables and compare progress in transaction boundary, staging batch ID and accepted output revision. Inspect execution plan, logical reads or scan bytes, waits and row estimates to distinguish a service being reachable from an accepted business operation actually completing.
 
-**Verification:** Identify the last accepted business/release boundary and the earliest phase that stopped advancing.
+**Why this happens and what matters:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Investigation and correction:** Walk the dependency chain through selected SQL engine and upstream typed staging tables and locate the last accepted evidence in transaction boundary, staging batch ID and accepted output revision. Distinguish a source that delivered nothing, an execution that never started, a held result and a consumer that still reads an old version; those require different fixes.
+
+**Related practical example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S13. A new release of engine-specific SQL scripts, schema migrations and execution parameters works in test but breaks a dependent production consumer. How do you diagnose it?
 
-**Model answer:** Compare versions, environment settings and the actual table grain, key constraints, types and null semantics. Hold the affected change/consumer path, identify an accepted compatible version, and recover both configuration and any changed durable state.
+**Answer:** Compare versions, environment settings and the actual table grain, key constraints, types and null semantics. Hold the affected change/consumer path, identify an accepted compatible version, and recover both configuration and any changed durable state.
 
-**Verification:** Run the affected consumer contract test under production-equivalent identity and inputs.
+**Why this happens and what matters:** Plan changes can come from data distribution, statistics, parameters, indexes or engine behavior. Compare evidence rather than assuming every regression needs an index.
+
+**Investigation and correction:** Treat the release as a change to engine-specific SQL scripts, schema migrations and execution parameters and its dependencies, not just to one code file. Compare table grain, key constraints, types and null semantics and the execution identity between test and production. Restore a compatible state before allowing unsafe consumers to continue.
+
+**Related practical example:** A once-selective customer predicate may become expensive after one customer dominates the data.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S14. Latency doubles for one transformation query or stored-procedure batch although the request or data volume is unchanged. What is your investigation sequence?
 
-**Model answer:** Compare a known-good baseline with execution plan, logical reads or scan bytes, waits and row estimates and inspect join cardinality, scans, statistics, blocking and distributed data movement. Check dependency/configuration changes before scaling; make one measured correction and validate business results are unchanged.
+**Answer:** Compare a known-good baseline with execution plan, logical reads or scan bytes, waits and row estimates and inspect join cardinality, scans, statistics, blocking and distributed data movement. Check dependency/configuration changes before scaling; make one measured correction and validate business results are unchanged.
 
-**Verification:** Compare representative latency distribution, throughput and correctness before and after the change.
+**Why this happens and what matters:** Plan changes can come from data distribution, statistics, parameters, indexes or engine behavior. Compare evidence rather than assuming every regression needs an index.
+
+**Investigation and correction:** Use execution plan, logical reads or scan bytes, waits and row estimates to compare the same business boundary and concurrency against a known-good baseline. Examine join cardinality, scans, statistics, blocking and distributed data movement and changed dependencies/configuration. A faster run is not acceptable if it changes values, permitted access or recovery behavior.
+
+**Related practical example:** A once-selective customer predicate may become expensive after one customer dominates the data.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S15. An operation involving SQL may have completed, but the caller timed out before receiving confirmation. How do you retry safely?
 
-**Model answer:** Inspect the durable outcome in transaction boundary, staging batch ID and accepted output revision before repeating the operation. For mutations or external side effects, use a stable operation key and supported idempotent/transactional behavior; read-only retries have a different risk.
+**Answer:** Inspect the durable outcome in transaction boundary, staging batch ID and accepted output revision before repeating the operation. For mutations or external side effects, use a stable operation key and supported idempotent/transactional behavior; read-only retries have a different risk.
 
-**Verification:** Simulate the timeout after completion and prove the retry does not create an extra business side effect.
+**Why this happens and what matters:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Investigation and correction:** Separate an uncertain response from an uncertain operation. The caller's timeout does not undo a completed write, grant, deployment or external request. Read the outcome represented by transaction boundary, staging batch ID and accepted output revision and repeat only through a supported safe operation/status mechanism.
+
+**Related practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S16. Two automated callers perform conflicting changes to one transformation query or stored-procedure batch at the same time. How do you prevent lost or inconsistent state?
 
-**Model answer:** Identify the shared resource and ownership boundary in transaction boundary, staging batch ID and accepted output revision. Use the platform's supported transaction/lease/lock or a serialized owner, and reconcile the final intended outcome rather than accepting whichever request finishes last.
+**Answer:** Identify the shared resource and ownership boundary in transaction boundary, staging batch ID and accepted output revision. Use the platform's supported transaction/lease/lock or a serialized owner, and reconcile the final intended outcome rather than accepting whichever request finishes last.
 
-**Verification:** Execute the conflicting requests and verify one accepted outcome with auditable ownership.
+**Why this happens and what matters:** Plan changes can come from data distribution, statistics, parameters, indexes or engine behavior. Compare evidence rather than assuming every regression needs an index.
+
+**Investigation and correction:** Define who owns the shared mutation and which state version each caller expected. Preserve transaction boundary, staging batch ID and accepted output revision so a rejected or losing caller can reconcile rather than overwrite blindly. The exact transaction, lease or lock must be supported by the target service.
+
+**Related practical example:** A once-selective customer predicate may become expensive after one customer dominates the data.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S17. An upstream contract change reaches SQL without prior notice. How do you contain the impact?
 
-**Model answer:** Validate against table grain, key constraints, types and null semantics and distinguish compatible from breaking changes. Retain the original input/change evidence, stop unsafe dependent work and obtain a reviewed migration/version before resuming.
+**Answer:** Validate against table grain, key constraints, types and null semantics and distinguish compatible from breaking changes. Retain the original input/change evidence, stop unsafe dependent work and obtain a reviewed migration/version before resuming.
 
-**Verification:** Use a breaking-change fixture and show that the affected consumer is protected rather than silently corrupted.
+**Why this happens and what matters:** Filtering before or after aggregation changes the population. Outer joins also react differently to predicates placed in ON versus WHERE.
+
+**Investigation and correction:** Classify the change against table grain, key constraints, types and null semantics: additional optional information may be compatible, while key/type/meaning changes can be breaking. Preserve evidence and identify all affected consumers before approving a migration or versioned release.
+
+**Related practical example:** A right-table WHERE condition can remove null-extended rows that a LEFT JOIN was intended to preserve.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S18. You need to investigate last month's incident, but some transaction boundary, staging batch ID and accepted output revision evidence has expired. What can you recover and what should change?
 
-**Model answer:** Inventory actual retained records/backups and state honestly which boundaries can still be reconstructed. Align retention of transaction boundary, staging batch ID and accepted output revision and operational evidence with recovery/audit requirements; do not promise recovery from expired artifacts.
+**Answer:** Inventory actual retained records/backups and state honestly which boundaries can still be reconstructed. Align retention of transaction boundary, staging batch ID and accepted output revision and operational evidence with recovery/audit requirements; do not promise recovery from expired artifacts.
 
-**Verification:** Reconstruct one retained incident end to end and document the tested retention/recovery boundary.
+**Why this happens and what matters:** An efficient access predicate must still match timezone and boundary semantics. Rewriting a date expression incorrectly can change which records qualify.
+
+**Investigation and correction:** Recovery can reconstruct only what still exists and is consistent. Inventory transaction boundary, staging batch ID and accepted output revision, relevant backups and dependency records, then state any gap explicitly. Retention must be set from agreed audit, replay and recovery use cases rather than an arbitrary cleanup interval.
+
+**Related practical example:** Use a tested half-open timestamp range for a day when that matches the source/business timezone contract.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S19. Sensitive identifiers appear in execution plan, logical reads or scan bytes, waits and row estimates. How would you fix the logging and access design?
 
-**Model answer:** Minimize/redact payload values and use restricted references/correlation IDs. Review database execution identity, object grants and approved parameter binding for logs and source objects, then follow the approved exposure response and validate logging with synthetic sensitive fields.
+**Answer:** Minimize/redact payload values and use restricted references/correlation IDs. Review database execution identity, object grants and approved parameter binding for logs and source objects, then follow the approved exposure response and validate logging with synthetic sensitive fields.
 
-**Verification:** Confirm useful troubleshooting context remains while restricted values are absent from general logs/outputs.
+**Why this happens and what matters:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Investigation and correction:** Keep identity, run/object references and reason codes needed for troubleshooting while excluding restricted payload values. Review who can read execution plan, logical reads or scan bytes, waits and row estimates and derived exports; minimizing the source log alone does not remove already copied sensitive output.
+
+**Related practical example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S20. An automation for SQL accidentally points to production while rehearsing in development. What controls would you add?
 
-**Model answer:** Validate environment/resource identifiers in engine-specific SQL scripts, schema migrations and execution parameters, use environment-scoped identities and fail closed on a configuration mismatch. Review any completed mutations against transaction boundary, staging batch ID and accepted output revision before restoring normal processing.
+**Answer:** Validate environment/resource identifiers in engine-specific SQL scripts, schema migrations and execution parameters, use environment-scoped identities and fail closed on a configuration mismatch. Review any completed mutations against transaction boundary, staging batch ID and accepted output revision before restoring normal processing.
 
-**Verification:** Demonstrate the development identity/configuration cannot perform the unintended production action.
+**Why this happens and what matters:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Investigation and correction:** Environment validation belongs before mutation. Bind engine-specific SQL scripts, schema migrations and execution parameters to approved resource names and scoped identities so the development execution cannot reach unintended production targets. If the mistake already happened, reconcile the exact affected state before rerunning.
+
+**Related practical example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S21. Selected sql engine and upstream typed staging tables is temporarily unavailable. What retry and recovery policy fits SQL?
 
-**Model answer:** Distinguish transient connectivity/rate errors from invalid credentials/contracts. Use bounded platform-supported retry and preserved transaction boundary, staging batch ID and accepted output revision; coordinate the owning system and avoid endless retries that duplicate side effects or hide stale results.
+**Answer:** Distinguish transient connectivity/rate errors from invalid credentials/contracts. Use bounded platform-supported retry and preserved transaction boundary, staging batch ID and accepted output revision; coordinate the owning system and avoid endless retries that duplicate side effects or hide stale results.
 
-**Verification:** Rehearse outage and recovery, checking accepted progress and the absence of duplicate external effects.
+**Why this happens and what matters:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Investigation and correction:** Use the dependency's documented error and retry contract. Invalid permissions/schema are not transient outages; retries do not repair them. During an outage, keep transaction boundary, staging batch ID and accepted output revision durable and make accepted-data/service staleness visible instead of reporting a healthy end-to-end operation.
+
+**Related practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S22. Costs associated with SQL rise while accepted business volume stays flat. How do you investigate without losing recovery capability?
 
-**Model answer:** Break cost down by relevant compute, storage, requests, retention and dependency use, then inspect join cardinality, scans, statistics, blocking and distributed data movement. Remove demonstrated waste while preserving required transaction boundary, staging batch ID and accepted output revision and correctness/access controls.
+**Answer:** Break cost down by relevant compute, storage, requests, retention and dependency use, then inspect join cardinality, scans, statistics, blocking and distributed data movement. Remove demonstrated waste while preserving required transaction boundary, staging batch ID and accepted output revision and correctness/access controls.
 
-**Verification:** Report comparable cost per accepted operation/workload and confirm service/recovery targets remain met.
+**Why this happens and what matters:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Investigation and correction:** Measure cost at an accepted business workload boundary, including repeated attempts and retained artifacts. Link changes to join cardinality, scans, statistics, blocking and distributed data movement and test the same service targets afterward. Deleting recovery evidence to lower cost changes capabilities and requires an explicit approved retention decision.
+
+**Related practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S23. During a recovery exercise, engine-specific SQL scripts, schema migrations and execution parameters is restored but the business path still fails. What else is required?
 
-**Model answer:** Restore/validate database execution identity, object grants and approved parameter binding, selected SQL engine and upstream typed staging tables and the appropriate transaction boundary, staging batch ID and accepted output revision. Reconcile durable data/external outcomes and consumer routing before declaring the application path recovered.
+**Answer:** Restore/validate database execution identity, object grants and approved parameter binding, selected SQL engine and upstream typed staging tables and the appropriate transaction boundary, staging batch ID and accepted output revision. Reconcile durable data/external outcomes and consumer routing before declaring the application path recovered.
 
-**Verification:** Complete a normal authorized end-to-end operation and measure recovery against the agreed objective.
+**Why this happens and what matters:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Investigation and correction:** Configuration restoration alone is incomplete when identities, network routing, dependencies or durable business state remain unavailable. Revalidate database execution identity, object grants and approved parameter binding, reconcile transaction boundary, staging batch ID and accepted output revision and execute a normal authorized consumer path before calling the recovery successful.
+
+**Related practical example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S24. Only a small subset of records, requests or objects fails in SQL. How do you isolate it without silently accepting incomplete results?
 
-**Model answer:** Correlate failing business keys/objects with execution plan, logical reads or scan bytes, waits and row estimates and validate their table grain, key constraints, types and null semantics. Preserve restricted exception evidence and apply the approved hold/quarantine/partial-success policy; do not blanket-ignore errors.
+**Answer:** Correlate failing business keys/objects with execution plan, logical reads or scan bytes, waits and row estimates and validate their table grain, key constraints, types and null semantics. Preserve restricted exception evidence and apply the approved hold/quarantine/partial-success policy; do not blanket-ignore errors.
 
-**Verification:** Reconcile successful and failed scope, fix the actual cause and revalidate the affected subset.
+**Why this happens and what matters:** Duplicate elimination is a semantic operation with computational cost. Prefer preserving records unless the contract explicitly requires set uniqueness.
+
+**Investigation and correction:** Find the smallest complete failed business scope using keys/objects and execution plan, logical reads or scan bytes, waits and row estimates. Distinguish invalid input from missing reference, permission or ordering conflicts. Any quarantine or partial success must follow table grain, key constraints, types and null semantics and preserve a clear accounting of accepted versus failed scope.
+
+**Related practical example:** UNION ALL is appropriate for distinct source deliveries only if duplicate business keys are handled elsewhere.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ### S25. You must change engine-specific SQL scripts, schema migrations and execution parameters while dependent workloads remain active. What release sequence would you use?
 
-**Model answer:** Inventory consumers and table grain, key constraints, types and null semantics compatibility, deploy additive/compatible prerequisites first and validate the actual execution path. Control conflicting activation, retain transaction boundary, staging batch ID and accepted output revision and define a tested rollback/correction route for incompatible behavior.
+**Answer:** Inventory consumers and table grain, key constraints, types and null semantics compatibility, deploy additive/compatible prerequisites first and validate the actual execution path. Control conflicting activation, retain transaction boundary, staging batch ID and accepted output revision and define a tested rollback/correction route for incompatible behavior.
 
-**Verification:** Prove old/new consumers work during the intended transition and no operation uses a partially updated configuration.
+**Why this happens and what matters:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Investigation and correction:** Order changes by dependency and compatibility. Introduce safe prerequisites, verify both existing and transitioning consumers, then activate the intended route. Keep transaction boundary, staging batch ID and accepted output revision and a tested correction/rollback boundary so a partially applied release remains recoverable.
+
+**Related practical example:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**How to verify the resolution:** Validate the accepted result and the intended table grain, key constraints, types and null semantics. Retain the original failure and recovered result with their operation/run references. Where the operation mutates data or an external outcome, test a repeated attempt; for an access incident, also confirm the unrelated forbidden operation remains denied.
 
 ## D. Practical implementation exercises
 
-These are interview assignments with an answer outline, not provisioned Azure resources. Use development resources and synthetic/approved data. For code questions, name the engine/runtime and supply reproducible input/expected output; for governance/deployment questions, supply configuration and access/recovery evidence.
+These exercises include implementation reasoning, solution requirements and selected code or flow examples. They do not provision Azure resources. Use development resources and synthetic/approved data. For code questions, name the engine/runtime and supply reproducible input/expected output; for governance/deployment questions, supply configuration and access/recovery evidence.
 
 ### P01. Write latest-record-per-key SQL.
 
-**Model answer:** Use ROW_NUMBER with authoritative ordering, and detect conflicting equal-sequence rows separately.
+**Answer:** Use ROW_NUMBER with authoritative ordering, and detect conflicting equal-sequence rows separately.
+
+**Implementation reasoning:** Tie behavior is part of business meaning. A rank function cannot choose an authoritative latest correction when the source provides conflicting equal-order rows.
+
+**Example to work through:** Keep both tied winners for ranking requirements, or reject conflicting ties for latest-state ingestion.
+
+**Illustrative implementation:**
+
+```sql
+-- T-SQL example: validate null keys and conflicting equal-sequence
+-- payloads separately before using this latest-per-key result.
+WITH ordered AS (
+  SELECT source_system, transaction_id, line_id, source_sequence,
+         amount, currency_code,
+         ROW_NUMBER() OVER (
+           PARTITION BY source_system, transaction_id, line_id
+           ORDER BY source_sequence DESC
+         ) AS rn
+  FROM dbo.validated_staging
+)
+SELECT source_system, transaction_id, line_id, source_sequence,
+       amount, currency_code
+FROM ordered WHERE rn = 1;
+-- Equal sequence rows must have an identical full relevant payload
+-- or fail validation; otherwise ordering remains ambiguous.
+```
+
+**Expected deliverable:** Provide the implementation described above, its explicit inputs and expected results, and evidence for a normal case plus the failure/recovery case relevant to this question. Use the actual engine/runtime and approved identity; the example is a design/code starting point, not an executed cloud solution.
 
 ### P02. Write source-to-target reconciliation SQL.
 
-**Model answer:** Compare key sets, duplicate counts and decimal totals by the same date/entity/currency grain.
+**Answer:** Compare key sets, duplicate counts and decimal totals by the same date/entity/currency grain.
+
+**Implementation reasoning:** Precision, scale and rounding are part of the contract. Fixed decimal input still needs overflow and aggregation policy checks.
+
+**Example to work through:** Reconcile signed debit/credit totals in the agreed decimal scale and transaction currency.
+
+**Expected deliverable:** Provide the implementation described above, its explicit inputs and expected results, and evidence for a normal case plus the failure/recovery case relevant to this question. Use the actual engine/runtime and approved identity; the example is a design/code starting point, not an executed cloud solution.
 
 ### P03. Write an as-of historical join.
 
-**Model answer:** Use valid_from <= event time < valid_to with explicit current-end handling and prove one match per fact.
+**Answer:** Use valid_from <= event time < valid_to with explicit current-end handling and prove one match per fact.
+
+**Implementation reasoning:** Effective-time joins require nonoverlapping intervals and an explicit zero-match policy. Current dimension joins can silently restate old facts.
+
+**Example to work through:** Use the account mapping effective at posting time and fail if two versions qualify.
+
+**Expected deliverable:** Provide the implementation described above, its explicit inputs and expected results, and evidence for a normal case plus the failure/recovery case relevant to this question. Use the actual engine/runtime and approved identity; the example is a design/code starting point, not an executed cloud solution.
 
 ### P04. Create a failing-and-recovered test for one transformation query or stored-procedure batch.
 
-**Model answer:** Capture the initial transaction boundary, staging batch ID and accepted output revision, introduce one realistic dependency or validation failure and use execution plan, logical reads or scan bytes, waits and row estimates to isolate it. Recover through the supported path and compare accepted outcomes before/after; demonstrate no extra mutation, duplicate side effect or unauthorized access.
+**Answer:** Capture the initial transaction boundary, staging batch ID and accepted output revision, introduce one realistic dependency or validation failure and use execution plan, logical reads or scan bytes, waits and row estimates to isolate it. Recover through the supported path and compare accepted outcomes before/after; demonstrate no extra mutation, duplicate side effect or unauthorized access.
+
+**Implementation reasoning:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Example to work through:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**Expected deliverable:** Provide the implementation described above, its explicit inputs and expected results, and evidence for a normal case plus the failure/recovery case relevant to this question. Use the actual engine/runtime and approved identity; the example is a design/code starting point, not an executed cloud solution.
 
 ### P05. Prepare the operating handoff for SQL.
 
-**Model answer:** Document engine-specific SQL scripts, schema migrations and execution parameters, the table grain, key constraints, types and null semantics, required database execution identity, object grants and approved parameter binding, owner, normal/failure signals and recovery instructions using transaction boundary, staging batch ID and accepted output revision. Include one normal and one failure example plus actual service targets and retention assumptions.
+**Answer:** Document engine-specific SQL scripts, schema migrations and execution parameters, the table grain, key constraints, types and null semantics, required database execution identity, object grants and approved parameter binding, owner, normal/failure signals and recovery instructions using transaction boundary, staging batch ID and accepted output revision. Include one normal and one failure example plus actual service targets and retention assumptions.
+
+**Implementation reasoning:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Example to work through:** Two matching customer versions can duplicate one journal line and inflate revenue.
+
+**Expected deliverable:** Provide the implementation described above, its explicit inputs and expected results, and evidence for a normal case plus the failure/recovery case relevant to this question. Use the actual engine/runtime and approved identity; the example is a design/code starting point, not an executed cloud solution.
 
 ## E. Architecture and project discussion
 
 ### D01. Where does SQL fit in an end-to-end Azure data platform?
 
-**Model answer:** Use this specific flow: Typed source/staging tables -> joins windows and aggregates -> integrity checks -> accepted facts/views -> consumers. Explain what this component owns, how selected SQL engine and upstream typed staging tables connects, and what the accepted consumer/result boundary is.
+**Answer:** Use this specific flow: Typed source/staging tables -> joins windows and aggregates -> integrity checks -> accepted facts/views -> consumers. Explain what this component owns, how selected SQL engine and upstream typed staging tables connects, and what the accepted consumer/result boundary is.
+
+**Project explanation:** Constraints encode/enforce selected relationships only where the engine supports enforcement. Analytical engines may require explicit integrity checks.
+
+**Concrete example:** Do not assume a declared warehouse key prevented duplicates without testing the selected engine's behavior.
 
 ### D02. How would you justify using SQL for financial warehouse reconciliation and banking analytical transformations?
 
-**Model answer:** Start with actual volume, freshness, correctness, access and support requirements. Explain how one transformation query or stored-procedure batch meets them, compare a credible alternative and validate using execution plan, logical reads or scan bytes, waits and row estimates rather than choosing a tool merely because it is on the stack.
+**Answer:** Start with actual volume, freshness, correctness, access and support requirements. Explain how one transformation query or stored-procedure batch meets them, compare a credible alternative and validate using execution plan, logical reads or scan bytes, waits and row estimates rather than choosing a tool merely because it is on the stack.
+
+**Project explanation:** A named expression improves readability but does not necessarily persist results. Reuse and execution behavior depend on the engine/plan.
+
+**Concrete example:** A CTE referenced twice may still need plan inspection rather than an assumption that it was materialized once.
 
 ### D03. What controls must surround SQL in a financial or telecom project?
 
-**Model answer:** Tie table grain, key constraints, types and null semantics to accountable business ownership, verify database execution identity, object grants and approved parameter binding, preserve transaction boundary, staging batch ID and accepted output revision and validate outputs at matching business grain. Separate approved reference designs from evidence of work actually performed.
+**Answer:** Tie table grain, key constraints, types and null semantics to accountable business ownership, verify database execution identity, object grants and approved parameter binding, preserve transaction boundary, staging batch ID and accepted output revision and validate outputs at matching business grain. Separate approved reference designs from evidence of work actually performed.
+
+**Project explanation:** An efficient access predicate must still match timezone and boundary semantics. Rewriting a date expression incorrectly can change which records qualify.
+
+**Concrete example:** Use a tested half-open timestamp range for a day when that matches the source/business timezone contract.
 
 ### D04. Which measures would prove your SQL optimization helped?
 
-**Model answer:** Record the old/new configuration and comparable workload, measure join cardinality, scans, statistics, blocking and distributed data movement with execution plan, logical reads or scan bytes, waits and row estimates, and report latency/throughput/cost as relevant. Confirm unchanged correctness, access and recovery behavior before claiming improvement.
+**Answer:** Record the old/new configuration and comparable workload, measure join cardinality, scans, statistics, blocking and distributed data movement with execution plan, logical reads or scan bytes, waits and row estimates, and report latency/throughput/cost as relevant. Confirm unchanged correctness, access and recovery behavior before claiming improvement.
+
+**Project explanation:** A join's output grain follows all eligible pairs, not the left input's intended uniqueness. Define relationship cardinality and unmatched-row behavior first.
+
+**Concrete example:** Two matching customer versions can duplicate one journal line and inflate revenue.
 
 ### D05. How would you explain your own contribution to a SQL interview project?
 
-**Model answer:** Identify which engine-specific SQL scripts, schema migrations and execution parameters you personally built/reviewed/operated, one specific failure you resolved, the evidence in transaction boundary, staging batch ID and accepted output revision and a verified outcome. State team-owned components separately and do not invent scale or savings.
+**Answer:** Identify which engine-specific SQL scripts, schema migrations and execution parameters you personally built/reviewed/operated, one specific failure you resolved, the evidence in transaction boundary, staging batch ID and accepted output revision and a verified outcome. State team-owned components separately and do not invent scale or savings.
+
+**Project explanation:** Plan changes can come from data distribution, statistics, parameters, indexes or engine behavior. Compare evidence rather than assuming every regression needs an index.
+
+**Concrete example:** A once-selective customer predicate may become expensive after one customer dominates the data.
 
 ## Revision notes and common mistakes
 
@@ -309,7 +570,7 @@ For a mock round, choose 3 core, 2 advanced, 5 scenario and 1 practical question
 
 ## Official references
 
-The questions/model answers are original interview preparation guidance. The linked primary documentation describes the platform and selected semantics; use its version-specific pages for exact syntax, limits and capabilities. Overview pages do not independently substantiate every proposed production design.
+The questions and detailed answers are original interview preparation guidance. The linked primary documentation describes the platform and selected semantics; use its version-specific pages for exact syntax, limits and capabilities. Overview pages do not independently substantiate every proposed production design.
 
 - [SQL official documentation](https://learn.microsoft.com/en-us/sql/t-sql/queries/select-transact-sql).
 

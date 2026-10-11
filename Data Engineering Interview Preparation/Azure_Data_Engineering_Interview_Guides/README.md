@@ -1,8 +1,8 @@
 # Azure Data Engineering — 20 Separate Interview Guides
 
-**1,000 questions with model answers, including 500 scenario-based questions.** Every technology has its own Markdown file with exactly 50 questions: 10 core, 5 advanced, 25 scenarios, 5 practical exercises and 5 architecture/project questions.
+**1,000 questions with detailed explanatory answers, including 500 scenario-based questions.** Every technology has its own Markdown file with exactly 50 questions: 10 core, 5 advanced, 25 scenarios, 5 practical exercises and 5 architecture/project questions.
 
-These are original interview preparation questions, not leaked interview/exam material. Model answers are concise outlines; exact APIs, feature availability and runtime/service limits require checking the relevant official documentation. Scenario questions are hypothetical and must not be presented as work actually performed for a client.
+These are original interview preparation questions, not leaked interview/exam material. Answers explain concepts, practical use, implementation context and scenario investigation/recovery; exact APIs, feature availability and runtime/service limits require checking the relevant official documentation. Scenario questions are hypothetical and must not be presented as work actually performed for a client.
 
 ## Files
 
@@ -50,6 +50,12 @@ Each question has a stable ID: C01–C10 (core), A01–A05 (advanced), S01–S25
 
 ## Use with the existing project documents
 
-The [project portfolio](../Azure_Data_Engineering_Portfolio/README.md) and [full flow diagrams](../Azure_Data_Engineering_Portfolio/FULL_PROJECT_FLOW_DIAGRAMS.md) provide six reference architectures. Match interview practice to the actual project technology: Fabric banking analytics, Azure lake modernization, enterprise datahub, quality/governance, financial warehouse integration and telecom streaming. Do not force all twenty technologies into every project.
+The [project portfolio](../Azure_Data_Engineering_Portfolio/README.md) links six self-contained project Markdown files, each containing its complete flow diagrams and implementation notes. Match interview practice to the actual project technology: Fabric banking analytics, Azure lake modernization, enterprise datahub, quality/governance, financial warehouse integration and telecom streaming. Do not force all twenty technologies into every project.
 
-Documents contain questions, model answers and exercise outlines. They do not provision cloud resources or demonstrate that production configurations have been executed. Retain only verified personal experience in resume/project answers.
+Documents contain questions, detailed explanatory answers, scenario investigation/correction/verification, and practical implementation guidance with selected code/flow examples. They do not provision cloud resources or demonstrate that production configurations have been executed. Retain only verified personal experience in resume/project answers.
+
+
+## Expanded answer format
+
+Each core/advanced answer now includes the direct answer, a question-specific explanation, a practical example and relevant implementation guidance. Each scenario explains the relevant failure/correctness issue, investigation and correction, a practical example, and how to verify the result. Practical exercises include reasoning and completion requirements; selected questions include illustrative code or flow implementations. All 1,000 answers use **Answer**, with the earlier short-answer format removed.
+
